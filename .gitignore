@@ -8,3 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+
+# scratch files
+scratch/
+
+# Environment variables
+.env
+
+# Vendor directory
+vendor/
