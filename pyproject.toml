@@ -3,19 +3,25 @@ name = "memento-agent"
 version = "0.1.0"
 description = ""
 readme = "README.md"
-authors = [
-    { name = "Haleuan", email = "arco.work@outlook.com" }
-]
 requires-python = ">=3.12"
-dependencies = [
-    "openai>=3.35.1",
-    "pydantic>=2.14.1",
-    "python-dotenv>=1.2.4",
-]
+dependencies = ["openai>=3.35.1", "pydantic>=2.14.1", "python-dotenv>=1.2.4"]
 
 [project.scripts]
-memento-agent = "memento_agent:main"
+mementoagent = "mementoagent:main"
 
 [build-system]
 requires = ["uv_build>=0.13.4,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "mementoagent"
+
+[tool.pyright]
+stubPath = "typings"
+typeCheckingMode = "standard"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "ipywidgets>=8.1.9",
+]
