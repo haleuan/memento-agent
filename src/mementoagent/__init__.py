@@ -1,2 +1,8 @@
+"""Provenance-backed personal memory assistant."""
+
+
 def main() -> None:
-    print("Hello from memento-agent!")
+    """Run the Memento command-line application."""
+    from .cli import main as cli_main
+
+    cli_main()
