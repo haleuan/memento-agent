@@ -1,4 +1,4 @@
-"""Read-only record validation and verification seals."""
+"""TOML shape loading and evidence grounding."""
 
 from .invariants import normalize_whitespace, validate_record
 from .shape import LoadedRecord, RecordLoadError, load_record_file

@@ -1,7 +1,7 @@
 """Schemas for achievement records.
 
 The values in this module intentionally retain the text extracted from a
-source document.  In particular, ``level_raw`` is not normalised into a
+source document.  In particular, `level_raw` is not normalised into a
 canonical ranking; doing that would turn an extraction into an inference.
 """
 

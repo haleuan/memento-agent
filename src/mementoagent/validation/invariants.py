@@ -30,14 +30,13 @@ def validate_record(record: RecordEnvelope[AchievementData], workspace: Path | s
         if not blocks_path.is_file():
             errors.append(f"{prefix}: parse snapshot not found")
             continue
-        block = next(
-            (
-                json.loads(line)
-                for line in blocks_path.read_text(encoding="utf-8").splitlines()
-                if line.strip() and json.loads(line).get("id") == evidence.block
-            ),
-            None,
-        )
+        block = None
+        for line in blocks_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                candidate = json.loads(line)
+                if candidate.get("id") == evidence.block:
+                    block = candidate
+                    break
         if block is None:
             errors.append(f"{prefix}: block not found")
         elif normalize_whitespace(evidence.quote) not in normalize_whitespace(

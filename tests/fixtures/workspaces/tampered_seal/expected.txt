@@ -1,7 +1,0 @@
-Status: tampered
-Issues:
-  - [ERROR] seal_mismatch: verification seal does not match critical fields
-  - [WARN] critical_field: data.level_raw requires human review
-  - [WARN] critical_field: data.issuer requires human review
-  - [WARN] critical_field: occurred requires human review
-  - [INFO] verification: not yet verified

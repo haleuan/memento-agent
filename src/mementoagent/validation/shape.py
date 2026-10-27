@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import tomllib
 from typing import Any
 
@@ -49,7 +50,7 @@ def load_record_file(path: Path | str) -> LoadedRecord:
     """Parse a TOML record, validate its schema, and retain its body.
 
     Args:
-        path: Path to a ``.toml`` record file.
+        path: Path to a `.toml` record file.
 
     Returns:
         The validated record and its optional narrative body.
@@ -67,6 +68,10 @@ def load_record_file(path: Path | str) -> LoadedRecord:
     except tomllib.TOMLDecodeError as exc:
         line = getattr(exc, "lineno", None)
         column = getattr(exc, "colno", None)
+        if line is None:
+            match = re.search(r"line (\d+), column (\d+)", str(exc))
+            if match:
+                line, column = map(int, match.groups())
         raise RecordSyntaxError(str(exc), line, column) from exc
     except OSError as exc:
         raise RecordLoadError(f"Unable to read record: {exc}") from exc

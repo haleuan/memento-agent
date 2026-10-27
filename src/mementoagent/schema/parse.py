@@ -28,18 +28,18 @@ class ParsedBlock(BaseModel):
 
     id: SafeIdentifier
     page: StrictInt = Field(ge=0)
-    bbox: list[StrictFloat] = Field(min_length=4, max_length=4)
+    bbox: list[StrictFloat] | None = Field(default=None, min_length=4, max_length=4)
     type: StrictStr = Field(min_length=1)
     text: StrictStr
     conf: StrictFloat | None = Field(default=None, ge=0.0, le=1.0)
 
     @field_validator("bbox")
     @classmethod
-    def validate_bbox(cls, value: list[float]) -> list[float]:
+    def validate_bbox(cls, value: list[float] | None) -> list[float] | None:
         """Validate normalized and ordered bounding-box coordinates.
 
         Args:
-            value: Coordinates in ``[x0, y0, x1, y1]`` order.
+            value: Coordinates in `[x0, y0, x1, y1]` order.
 
         Returns:
             The unchanged coordinate list.
@@ -47,6 +47,8 @@ class ParsedBlock(BaseModel):
         Raises:
             ValueError: If coordinates are outside the page or unordered.
         """
+        if value is None:
+            return None
         if any(not isfinite(coordinate) or coordinate < 0.0 or coordinate > 1.0 for coordinate in value):
             raise ValueError("bbox coordinates must be between 0 and 1")
         if value[0] > value[2] or value[1] > value[3]:
