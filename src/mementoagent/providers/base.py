@@ -33,7 +33,11 @@ class BaseProvicer(ABC):
 
     @abstractmethod
     def parse(self):
-        """Parse a response into a structured representation."""
+        """Parse a response into a structured representation.
+
+        Returns:
+            The provider response in its structured representation.
+        """
         pass
 
 
@@ -52,10 +56,18 @@ class BaseAsyncProvider(ABC):
 
     @abstractmethod
     async def chat(self):
-        """Generate a response asynchronously."""
+        """Generate a response asynchronously.
+
+        Returns:
+            The provider response.
+        """
         pass
 
     @abstractmethod
     async def parse(self):
-        """Parse a response into a structured representation asynchronously."""
+        """Parse a response into a structured representation asynchronously.
+
+        Returns:
+            The provider response in its structured representation.
+        """
         pass

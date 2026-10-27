@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 ResponseFormat = TypeVar("ResponseFormat", bound=BaseModel)
 
+
 class OpenAIProvider:
     """Call the OpenAI Responses API synchronously."""
 

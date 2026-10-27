@@ -10,7 +10,14 @@ from .workspace import WorkspaceNotFoundError, find_workspace
 
 
 def check(record_path: Path) -> int:
-    """Check one TOML record and return its process exit code."""
+    """Check one TOML record and return its process exit code.
+
+    Args:
+        record_path: Path to the TOML record to validate.
+
+    Returns:
+        `0` when the record is valid; otherwise `1`.
+    """
     if record_path.suffix.lower() != ".toml":
         print("ERROR: record path must end with .toml")
         return 1
@@ -32,7 +39,15 @@ def check(record_path: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Parse command-line arguments and run the selected command."""
+    """Parse command-line arguments and run the selected command.
+
+    Args:
+        argv: Command-line arguments without the executable name. If omitted,
+            arguments are read from the process command line.
+
+    Returns:
+        The selected command's process exit code.
+    """
     parser = argparse.ArgumentParser(prog="memento")
     subparsers = parser.add_subparsers(dest="command", required=True)
     check_parser = subparsers.add_parser("check", help="check one TOML record")

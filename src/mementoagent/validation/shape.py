@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from mementoagent.schema import AchievementData, RecordEnvelope
+from mementoagent.schema import AchievementItem, RecordEnvelope
 
 
 class RecordLoadError(ValueError):
@@ -42,7 +42,7 @@ class RecordSyntaxError(RecordLoadError):
 class LoadedRecord:
     """Typed record and optional narrative body loaded from a file."""
 
-    record: RecordEnvelope[AchievementData]
+    record: RecordEnvelope[AchievementItem]
     body: str
 
 
@@ -80,7 +80,7 @@ def load_record_file(path: Path | str) -> LoadedRecord:
     if payload.get("schema") != "achievement/1":
         raise RecordLoadError(f"unsupported schema: {payload.get('schema')!r}")
     try:
-        record = RecordEnvelope[AchievementData].model_validate(payload)
+        record = RecordEnvelope[AchievementItem].model_validate(payload)
     except ValidationError as exc:
         messages = []
         for error in exc.errors(include_url=False):
@@ -88,7 +88,10 @@ def load_record_file(path: Path | str) -> LoadedRecord:
             message = error["msg"]
             if error["type"] == "datetime_type":
                 message = "timestamp must be quoted; quote the timestamp"
-            if location in {"created_at", "verification.at"} and "timestamp" not in message:
+            if (
+                location in {"created_at", "verification.at"}
+                and "timestamp" not in message
+            ):
                 message = "timestamp must be quoted; quote the timestamp"
             messages.append(f"{location}: {message}")
         detail = "; ".join(messages)

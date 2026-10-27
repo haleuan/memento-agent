@@ -23,3 +23,6 @@ AGENTS.md
 
 # Rebuildable workspace artifacts
 .memento/cache/
+
+# OS-specific files
+.DS_Store

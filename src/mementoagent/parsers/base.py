@@ -29,5 +29,12 @@ class DocumentParser(Protocol):
     """Interface implemented by future concrete document parsers."""
 
     def parse(self, source_path: Path) -> ParseResult:
-        """Parse a source file into normalized metadata and blocks."""
+        """Parse a source file into normalized metadata and blocks.
+
+        Args:
+            source_path: Path to the source document to parse.
+
+        Returns:
+            Metadata and normalized blocks from the parse snapshot.
+        """
         ...
