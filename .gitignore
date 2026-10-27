@@ -17,3 +17,9 @@ scratch/
 
 # Vendor directory
 vendor/
+
+# Agents documentation
+AGENTS.md
+
+# Rebuildable workspace artifacts
+.memento/cache/

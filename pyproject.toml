@@ -4,10 +4,16 @@ version = "0.1.0"
 description = ""
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["openai>=3.35.1", "pydantic>=2.14.1", "python-dotenv>=1.2.4"]
+dependencies = [
+    "openai>=3.35.1",
+    "pydantic>=2.14.1",
+    "python-dotenv>=1.2.4",
+    "typer>=0.16.0",
+]
 
 [project.scripts]
-mementoagent = "mementoagent:main"
+memento = "mementoagent.cli:main"
+mementoagent = "mementoagent.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.13.4,<0.14.0"]
@@ -20,8 +26,20 @@ module-name = "mementoagent"
 stubPath = "typings"
 typeCheckingMode = "standard"
 
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["D"]
+# ignore = ["D203", "D213"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.4.0",
     "ipywidgets>=8.1.9",
+    "pytest>=8.0.0",
+    "ruff>=0.17.2",
 ]

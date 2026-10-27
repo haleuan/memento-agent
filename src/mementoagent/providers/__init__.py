@@ -1,3 +1,5 @@
+"""Language-model provider implementations."""
+
 from .openai import OpenAIAsyncProvider, OpenAIProvider
 
 __all__ = [

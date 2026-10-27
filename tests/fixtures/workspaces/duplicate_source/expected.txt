@@ -1,0 +1,3 @@
+Status: verified
+Issues:
+  - [WARN] duplicate_source: identical source content: sources/45/45462189e16d5386a00445a9a23110b0001c18a3f8876f0e6246881e98416658-duplicate.txt, sources/45/45462189e16d5386a00445a9a23110b0001c18a3f8876f0e6246881e98416658.txt

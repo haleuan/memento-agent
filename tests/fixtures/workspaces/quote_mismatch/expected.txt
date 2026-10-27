@@ -1,0 +1,7 @@
+Status: draft
+Issues:
+  - [ERROR] quote_mismatch: evidence[0].quote not found in block text
+  - [WARN] critical_field: data.level_raw requires human review
+  - [WARN] critical_field: data.issuer requires human review
+  - [WARN] critical_field: occurred requires human review
+  - [INFO] verification: not yet verified

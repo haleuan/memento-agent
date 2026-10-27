@@ -4,7 +4,7 @@ import typer
 
 from .commands.check import check
 
-app = typer.Typer(no_args_is_help=True, help="Validate provenance-backed memory records.")
+app = typer.Typer(no_args_is_help=True, help="Validate provenance-backed TOML records.")
 app.command()(check)
 
 

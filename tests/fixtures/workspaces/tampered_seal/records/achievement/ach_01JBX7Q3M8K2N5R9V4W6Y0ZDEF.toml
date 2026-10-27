@@ -1,0 +1,30 @@
+id = "ach_01JBX7Q3M8K2N5R9V4W6Y0ZDEF"
+schema = "achievement/1"
+provenance = "document"
+created_at = "2025-01-12T09:30:00+08:00"
+body = '''
+
+用户自己的补充描述，不参与验证封印。
+'''
+
+[occurred]
+start = "2024-10"
+end = "2024-10"
+
+[data]
+kind = "award"
+title = "XX大学生程序设计竞赛"
+issuer = "XX竞赛组委会"
+level_raw = "省赛一等奖"
+
+[[evidence]]
+source = "sha256:45462189e16d5386a00445a9a23110b0001c18a3f8876f0e6246881e98416658"
+parse = "p_20250112_093045"
+block = "p0-b07"
+supports = ["data.title", "data.issuer", "data.level_raw", "occurred"]
+quote = "授予张三同学在XX大学生程序设计竞赛中荣获省赛二等奖"
+
+[verification]
+by = "human"
+at = "2025-01-12T10:00:00+08:00"
+sealed = "sha256:b6235142c814be949f78d1f2d3055e76e9945a380f1ed3a81027c66c802183f0"
