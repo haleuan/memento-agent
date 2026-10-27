@@ -3,7 +3,7 @@
 from math import isfinite
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, field_validator
 
 from .envelope import HashId, SafeIdentifier, Timestamp
 
@@ -19,7 +19,6 @@ class ParseMeta(BaseModel):
     version: StrictStr = Field(min_length=1)
     params: dict[str, Any] = Field(default_factory=dict)
     parsed_at: Timestamp
-    remote: StrictBool
 
 
 class ParsedBlock(BaseModel):

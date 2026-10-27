@@ -73,13 +73,14 @@ class Evidence(BaseModel):
 
 
 class Verification(BaseModel):
-    """Human review seal for the critical fields of a record."""
+    """Optional verification metadata reserved for a future contract."""
 
     model_config = ConfigDict(extra="forbid")
 
-    by: Literal["human"]
+    by: StrictStr = Field(min_length=1)
     at: Timestamp
-    sealed: HashId
+    # Stored data only in v0.1; never computed, read, or compared.
+    sealed: StrictStr | None = None
 
 
 RecordData = TypeVar("RecordData", bound=BaseModel)

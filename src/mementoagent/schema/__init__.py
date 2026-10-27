@@ -12,7 +12,6 @@ from .envelope import (
     Verification,
 )
 from .parse import ParseMeta, ParsedBlock
-from .source import SourceMetadata
 
 ENVELOPE_SCHEMA_VERSION = "envelope/1"
 ACHIEVEMENT_SCHEMA_VERSION = "achievement/1"
@@ -30,6 +29,5 @@ __all__ = [
     "RecordEnvelope",
     "RecordId",
     "SchemaVersion",
-    "SourceMetadata",
     "Verification",
 ]
