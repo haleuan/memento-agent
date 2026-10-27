@@ -156,29 +156,41 @@ def test_seal_matches_fixed_unicode_vector() -> None:
     record = as_record(record_payload())
     canonical = canonical_critical_fields(record)
     expected = (
-        '{"data":{"issuer":"组委会","kind":"award","level_raw":"二等奖","notes":null,"title":"竞赛"},'
-        '"evidence":[],"occurred":{"end":"2024-10","start":"2024-10"}}'
+        '{"data":{"issuer":"组委会","kind":"award","level_raw":"二等奖","title":"竞赛"},'
+        '"occurred":{"end":"2024-10","start":"2024-10"}}'
     ).encode("utf-8")
     assert canonical == expected
     seal = compute_seal(record)
-    assert seal == "sha256:bb4a19f5ee989213d5ad8476f964d774269de05562011435fb0a948244917e32"
+    assert seal == "sha256:86f1b967828066baed7d604f8d2af2e1d7f7369a3997d451bebcb08264d25893"
     # Key order and Markdown metadata are not critical fields.
     reordered = dict(reversed(list(record.model_dump(mode="json", by_alias=True).items())))
     reordered["created_at"] = "2025-01-13T09:30:00+08:00"
     assert compute_seal(reordered) == seal
 
 
-def test_evidence_array_order_changes_the_seal(grounded_record) -> None:
-    """Verify that evidence array order changes the seal."""
+def test_absent_and_null_optional_envelope_fields_have_same_seal() -> None:
+    """Treat absent optional fields like their typed null defaults."""
+    payload = record_payload()
+    payload["occurred"] = None
+    record = as_record(payload)
+    explicit = record.model_dump(mode="json", by_alias=True)
+    absent = dict(explicit)
+    absent.pop("occurred")
+    absent.pop("verification")
+    assert compute_seal(absent) == compute_seal(explicit)
+
+
+def test_evidence_changes_preserve_the_seal(grounded_record) -> None:
+    """Keep evidence outside the achievement seal's declared scope."""
     record, _ = grounded_record
     second = record.evidence[0].model_copy(update={"quote": "二等奖"})
     record.evidence.append(second)
     before = compute_seal(record)
     record.evidence.reverse()
-    assert compute_seal(record) != before
+    assert compute_seal(record) == before
 
 
-@pytest.mark.parametrize("field", ["data", "occurred", "evidence"])
+@pytest.mark.parametrize("field", ["data", "occurred"])
 def test_every_critical_field_changes_the_seal(grounded_record, field: str) -> None:
     """Verify that every critical field changes the seal."""
     record, _ = grounded_record
@@ -187,9 +199,18 @@ def test_every_critical_field_changes_the_seal(grounded_record, field: str) -> N
         record.data.level_raw = "一等奖"
     elif field == "occurred":
         record.occurred.start = "2024-09"
-    else:
-        record.evidence[0].quote = "二等奖"
     assert compute_seal(record) != before
+
+
+def test_added_valid_evidence_does_not_break_human_verification(grounded_record) -> None:
+    """Preserve verification when adding a valid source reference."""
+    record, paths = grounded_record
+    record.verification = Verification(by="human", at=TIMESTAMP, sealed=compute_seal(record))
+    record.evidence.append(record.evidence[0].model_copy())
+    result = validate_record(record, paths)
+    assert result.status == "verified"
+    assert result.exit_code == 0
+    assert "critical_field" not in {issue.code for issue in result.issues}
 
 
 def test_grounding_accepts_whitespace_and_human_seal(grounded_record) -> None:

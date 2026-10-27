@@ -27,4 +27,4 @@ quote = "授予张三同学在XX大学生程序设计竞赛中荣获省赛二等
 [verification]
 by = "human"
 at = "2025-01-12T10:00:00+08:00"
-sealed = "sha256:b6235142c814be949f78d1f2d3055e76e9945a380f1ed3a81027c66c802183f0"
+sealed = "sha256:1fe2c60053cb829d75a74f2472450abcc6eea8e7342bc5b8c55775e1cf193cad"

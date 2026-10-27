@@ -140,6 +140,7 @@ def test_body_after_table_is_rejected(tmp_path):
     result = CliRunner().invoke(app, ["check", str(record)])
     assert result.exit_code == 1
     assert "shape:" in result.output
+    assert "top-level keys must precede table headers" in result.output
 
 
 def test_absent_verification_and_occurred_default_to_null(tmp_path):

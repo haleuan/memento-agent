@@ -19,6 +19,17 @@ SCENARIOS = (
 )
 
 
+def test_clean_achievement_seal_is_pinned() -> None:
+    """Pin the canonical seal for the clean achievement fixture."""
+    from mementoagent.validation.shape import load_record_file
+    from mementoagent.validation.seal import compute_seal
+
+    record_path = next((FIXTURES / "clean_award" / "records").rglob("*.toml"))
+    assert compute_seal(load_record_file(record_path).record) == (
+        "sha256:1fe2c60053cb829d75a74f2472450abcc6eea8e7342bc5b8c55775e1cf193cad"
+    )
+
+
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_workspace_golden(scenario, tmp_path, monkeypatch):
     """Match CLI output and exit status to the selected workspace golden."""

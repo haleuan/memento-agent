@@ -11,10 +11,11 @@ from pydantic import BaseModel
 
 
 def canonical_critical_fields(record: BaseModel | Mapping[str, Any]) -> bytes:
-    """Serialize ``data``, ``occurred``, and ``evidence`` to canonical UTF-8 JSON.
+    """Serialize the record type's declared critical fields as canonical JSON.
 
-    Model defaults and nulls remain present; arrays retain their original order.
-    Whitespace and Unicode in factual strings are never normalized for sealing.
+    The data schema declares its critical field names. ``occurred`` is also
+    included, while evidence remains independently validated and does not affect
+    verification. Model defaults and nulls remain present.
 
     Args:
         record: A validated model or mapping with the critical record fields.
@@ -23,7 +24,7 @@ def canonical_critical_fields(record: BaseModel | Mapping[str, Any]) -> bytes:
         Compact, sorted-key JSON encoded as UTF-8 bytes.
 
     Raises:
-        KeyError: If a critical field is missing from the mapping.
+        KeyError: If a required critical field is missing from the record.
         ValueError: If the fields cannot be serialized as strict JSON.
     """
     payload = (
@@ -31,7 +32,14 @@ def canonical_critical_fields(record: BaseModel | Mapping[str, Any]) -> bytes:
         if isinstance(record, BaseModel)
         else dict(record)
     )
-    critical = {key: payload[key] for key in ("data", "occurred", "evidence")}
+    if isinstance(record, BaseModel):
+        field_names = record.data.CRITICAL_FIELDS
+    else:
+        field_names = ("kind", "title", "issuer", "level_raw")
+    critical = {
+        "data": {key: payload["data"][key] for key in field_names},
+        "occurred": payload.get("occurred"),
+    }
     return json.dumps(
         critical,
         sort_keys=True,
