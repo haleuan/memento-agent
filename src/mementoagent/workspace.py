@@ -10,7 +10,17 @@ class WorkspaceNotFoundError(FileNotFoundError):
 
 
 def find_workspace(start: Path | str) -> Path:
-    """Walk upward from a path and return the nearest workspace root."""
+    """Walk upward from a path and return the nearest workspace root.
+
+    Args:
+        start: File or directory from which to begin the upward search.
+
+    Returns:
+        The nearest ancestor containing a `.memento` directory.
+
+    Raises:
+        WorkspaceNotFoundError: If no ancestor is a Memento workspace.
+    """
     path = Path(start).expanduser().resolve()
     if path.is_file():
         path = path.parent
@@ -31,26 +41,58 @@ class WorkspacePaths:
         object.__setattr__(self, "root", self.root.expanduser().resolve())
 
     @staticmethod
-    def _digest(source: str) -> str:
-        """Return the digest from a source identifier."""
-        match = re.fullmatch(r"sha256:([0-9a-f]{64})", source)
+    def _extract_hex_digest(hash_identifier: str) -> str:
+        """Return the digest from a source identifier.
+
+        Args:
+            hash_identifier: Source identifier in `sha256:<64 lowercase hex digits>` form.
+
+        Returns:
+            The hexadecimal digest without its `sha256:` prefix.
+
+        Raises:
+            ValueError: If the source identifier has an invalid format.
+        """
+        match = re.fullmatch(r"sha256:([0-9a-f]{64})", hash_identifier)
         if not match:
             raise ValueError("invalid source hash")
         return match.group(1)
 
-    def source_path(self, source: str) -> Path | None:
-        """Return the first source file matching a content hash."""
-        digest = self._digest(source)
+    def find_source_file_by_hash(self, hash_file_identifier: str) -> Path | None:
+        """Return the first source file matching a content hash.
+
+        Args:
+            hash_file_identifier: Source identifier whose stored file should be located.
+
+        Returns:
+            The first matching source file, or `None` when no file exists.
+
+        Raises:
+            ValueError: If the source identifier has an invalid format.
+        """
+        digest = self._extract_hex_digest(hash_file_identifier)
         directory = self.root / "sources" / digest[:2]
         matches = sorted(
-            path for path in directory.glob(f"{digest}.*")
+            path
+            for path in directory.glob(f"{digest}.*")
             if path.is_file() and path.suffix != ".json"
         )
         return matches[0] if matches else None
 
     def blocks_path(self, source: str, parse_id: str) -> Path:
-        """Return a parse snapshot's block file after path validation."""
-        digest = self._digest(source)
+        """Return a parse snapshot's block file after path validation.
+
+        Args:
+            source: Source identifier for the parse snapshot.
+            parse_id: Identifier of the parse snapshot.
+
+        Returns:
+            Path to the snapshot's `blocks.jsonl` file.
+
+        Raises:
+            ValueError: If either identifier has an invalid format.
+        """
+        digest = self._extract_hex_digest(source)
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", parse_id):
             raise ValueError("invalid parse identifier")
         return self.root / ".memento" / "parses" / digest / parse_id / "blocks.jsonl"
