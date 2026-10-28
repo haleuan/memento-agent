@@ -3,11 +3,13 @@ name = "memento-agent"
 version = "0.1.0"
 description = ""
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=3.35.1",
     "pydantic>=2.14.1",
     "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]
@@ -37,8 +39,4 @@ select = ["D"]
 convention = "google"
 
 [dependency-groups]
-dev = [
-    "pytest>=8.0.0",
-    "ruff>=0.17.2",
-    "pyright>=1.1.0",
-]
+dev = ["pytest>=8.0.0", "ruff>=0.17.2", "pyright>=1.1.0"]
