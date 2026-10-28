@@ -198,7 +198,7 @@ class RecordEnvelope(BaseModel, Generic[RecordData]):
     type-specific content lives in the 'data' field.
 
     Generic usage:
-        - RecordEnvelope[AchievementData] for achievement records
+        - RecordEnvelope[AchievementItem] for achievement records
         - RecordEnvelope[NoteData] for note records (future)
         - RecordEnvelope[TaskData] for task records (future)
 
@@ -255,7 +255,7 @@ class RecordEnvelope(BaseModel, Generic[RecordData]):
     )
 
     data: RecordData = Field(
-        description="Type-specific structured payload. For achievement records, this is AchievementData. "
+        description="Type-specific structured payload. For achievement records, this is AchievementItem. "
         "For future record types (notes, tasks), this will be their respective data classes."
     )
 
