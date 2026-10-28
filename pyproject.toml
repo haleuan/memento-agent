@@ -39,4 +39,10 @@ select = ["D"]
 convention = "google"
 
 [dependency-groups]
-dev = ["pytest>=8.0.0", "ruff>=0.17.2", "pyright>=1.1.0"]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.17.2",
+    "pyright>=1.1.0",
+    "ipykernel>=7.4.0",
+    "ipywidgets>=8.1.9",
+]
