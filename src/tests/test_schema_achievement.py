@@ -41,10 +41,34 @@ def test_achievement_item_optional_fields_default_to_none() -> None:
     )
 
     assert result.level_raw is None
+    assert result.certificate_number is None
     assert result.description is None
     assert result.collaborators is None
     assert result.references is None
     assert result.tags is None
+
+
+def test_achievement_item_accepts_certificate_number() -> None:
+    """Store a certificate number as a structured achievement attribute."""
+    result = AchievementItem(
+        kind="certificate",
+        title="Certificate of Completion",
+        organization="Memento Institute",
+        certificate_number="CERT-123",
+    )
+
+    assert result.certificate_number == "CERT-123"
+
+
+def test_achievement_item_rejects_empty_certificate_number() -> None:
+    """Reject an empty certificate number when one is provided."""
+    with pytest.raises(ValidationError):
+        AchievementItem(
+            kind="certificate",
+            title="Certificate of Completion",
+            organization="Memento Institute",
+            certificate_number="",
+        )
 
 
 @pytest.mark.parametrize(
@@ -54,6 +78,7 @@ def test_achievement_item_optional_fields_default_to_none() -> None:
         "title",
         "organization",
         "level_raw",
+        "certificate_number",
         "description",
         "collaborators",
         "references",

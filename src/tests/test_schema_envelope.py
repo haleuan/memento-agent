@@ -156,7 +156,6 @@ def test_record_envelope_accepts_complete_achievement_record() -> None:
         data=data,
         evidence=[Evidence(source=VALID_HASH, quote="First Prize")],
         verification=Verification(by="reviewer", at="2025-01-13T09:30:00+08:00"),
-        body="Verified award record.",
     )
 
     assert record.schema_version == "achievement/1"
@@ -164,3 +163,22 @@ def test_record_envelope_accepts_complete_achievement_record() -> None:
     assert record.evidence[0].source == VALID_HASH
     assert record.verification is not None
     assert record.model_dump(by_alias=True)["schema"] == "achievement/1"
+
+
+def test_record_envelope_rejects_removed_body_field() -> None:
+    """Reject a free-form body outside the structured record schema."""
+    data = AchievementItem(
+        kind="award",
+        title="First Prize",
+        organization="Competition Committee",
+    )
+
+    with pytest.raises(ValidationError):
+        RecordEnvelope[AchievementItem](
+            id=VALID_RECORD_ID,
+            schema="achievement/1",
+            provenance="user",
+            created_at="2025-01-12T09:30:00+08:00",
+            data=data,
+            body="Legacy Markdown body",
+        )

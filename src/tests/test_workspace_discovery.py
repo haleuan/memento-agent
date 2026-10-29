@@ -85,26 +85,26 @@ def test_workspace_paths_rejects_invalid_source_hash(
         WorkspacePaths(tmp_path).find_source_file_by_hash(hash_identifier)
 
 
-def test_workspace_paths_builds_blocks_path(tmp_path: Path) -> None:
-    """Build the validated path for a parse snapshot block file."""
-    result = WorkspacePaths(tmp_path).blocks_path(VALID_HASH, "parse_01")
+def test_workspace_paths_builds_parse_snapshot_directory(tmp_path: Path) -> None:
+    """Build the validated directory for a parse snapshot."""
+    parse_id = "parse_" + "1" * 32
+    result = WorkspacePaths(tmp_path).parse_snapshot_dir(VALID_HASH, parse_id)
 
-    assert (
-        result
-        == tmp_path / ".memento" / "parses" / VALID_DIGEST / "parse_01" / "blocks.jsonl"
-    )
+    assert result == tmp_path / ".memento" / "parses" / VALID_DIGEST / parse_id
 
 
-def test_workspace_paths_blocks_path_rejects_invalid_hash(tmp_path: Path) -> None:
-    """Reject an invalid source hash before constructing a blocks path."""
+def test_workspace_paths_parse_snapshot_dir_rejects_invalid_hash(
+    tmp_path: Path,
+) -> None:
+    """Reject an invalid source hash before building a snapshot directory."""
     with pytest.raises(ValueError, match="invalid source hash"):
-        WorkspacePaths(tmp_path).blocks_path("sha256:bad", "parse_01")
+        WorkspacePaths(tmp_path).parse_snapshot_dir("sha256:bad", "parse_" + "1" * 32)
 
 
-@pytest.mark.parametrize("parse_id", ["", "bad/id", "bad id"])
-def test_workspace_paths_blocks_path_rejects_invalid_parse_id(
+@pytest.mark.parametrize("parse_id", ["", "bad/id", "bad id", "parse_01"])
+def test_workspace_paths_parse_snapshot_dir_rejects_invalid_parse_id(
     parse_id: str, tmp_path: Path
 ) -> None:
-    """Reject parse identifiers that could escape the snapshot directory."""
+    """Reject malformed parse IDs before building a snapshot directory."""
     with pytest.raises(ValueError, match="invalid parse identifier"):
-        WorkspacePaths(tmp_path).blocks_path(VALID_HASH, parse_id)
+        WorkspacePaths(tmp_path).parse_snapshot_dir(VALID_HASH, parse_id)

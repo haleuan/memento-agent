@@ -101,7 +101,7 @@ def test_main_check_reports_missing_record(
 ) -> None:
     """Return a failure when the requested record file does not exist."""
     workspace_root = init_workspace(tmp_path / "workspace")
-    record_path = workspace_root / "records" / "achievement" / "missing.yaml"
+    record_path = workspace_root / "records" / "achievement" / "missing.toml"
 
     result = main(["check", str(record_path)])
 
@@ -114,8 +114,8 @@ def test_main_check_reports_missing_record(
 @pytest.mark.parametrize(
     "content",
     [
-        "---\n[unclosed\n---\n",
-        "---\nid: invalid\n---\n",
+        "id = [",
+        'id = "invalid"\n',
     ],
 )
 def test_main_check_reports_invalid_record(
@@ -123,9 +123,9 @@ def test_main_check_reports_invalid_record(
     capsys: pytest.CaptureFixture[str],
     content: str,
 ) -> None:
-    """Return a failure when YAML or record validation fails."""
+    """Return a failure when TOML or record validation fails."""
     workspace_root = init_workspace(tmp_path / "workspace")
-    record_path = workspace_root / "records" / "achievement" / "invalid.yaml"
+    record_path = workspace_root / "records" / "achievement" / "invalid.toml"
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text(content, encoding="utf-8")
 
@@ -142,7 +142,7 @@ def test_main_check_reports_record_outside_workspace(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Return a failure when no workspace ancestor exists."""
-    record_path = tmp_path / "record.yaml"
+    record_path = tmp_path / "record.toml"
 
     result = main(["check", str(record_path)])
 
@@ -152,7 +152,7 @@ def test_main_check_reports_record_outside_workspace(
     assert captured.err.startswith("error: ")
 
 
-@pytest.mark.parametrize("argv", [["check"], ["unknown", "record.yaml"]])
+@pytest.mark.parametrize("argv", [["check"], ["unknown", "record.toml"]])
 def test_main_rejects_invalid_arguments(argv: list[str]) -> None:
     """Use argparse's standard exit code for invalid command arguments."""
     with pytest.raises(SystemExit) as error:

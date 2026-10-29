@@ -36,6 +36,7 @@ def test_workspace_source_and_record_flow_round_trips(
             kind="certificate",
             title="Certificate of Completion",
             organization="Memento Institute",
+            certificate_number="CERT-123",
         ),
         evidence=[
             Evidence(
@@ -53,6 +54,6 @@ def test_workspace_source_and_record_flow_round_trips(
     assert stored_source.is_file()
     assert not source_path.exists()
     assert record_path == (
-        workspace_root / "records" / "achievement" / f"{RECORD_ID}.yaml"
+        workspace_root / "records" / "achievement" / f"{RECORD_ID}.toml"
     )
     assert loaded_record == record
