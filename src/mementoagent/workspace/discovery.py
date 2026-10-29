@@ -73,7 +73,7 @@ class WorkspacePaths:
         digest = self._extract_hex_digest(hash_file_identifier)
         directory = self.root / "sources" / digest[:2]
 
-        # TODO: Consider it's not `.json` files friendly to ignore them here, but they are not the source files themselves.
+        # TODO (TD-001): Consider it's not `.json` files friendly to ignore them here, but they are not the source files themselves.
         matches = sorted(
             path
             for path in (directory / digest, *directory.glob(f"{digest}.*"))
@@ -81,20 +81,20 @@ class WorkspacePaths:
         )
         return matches[0] if matches else None
 
-    def blocks_path(self, source: str, parse_id: str) -> Path:
-        """Return a parse snapshot's block file after path validation.
+    def parse_snapshot_dir(self, source: str, parse_id: str) -> Path:
+        """Return a parse snapshot directory after path validation.
 
         Args:
             source: Source identifier for the parse snapshot.
             parse_id: Identifier of the parse snapshot.
 
         Returns:
-            Path to the snapshot's `blocks.jsonl` file.
+            Path to the snapshot directory.
 
         Raises:
             ValueError: If either identifier has an invalid format.
         """
         digest = self._extract_hex_digest(source)
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", parse_id):
+        if not re.fullmatch(r"parse_[0-9a-f]{32}", parse_id):
             raise ValueError("invalid parse identifier")
-        return self.root / ".memento" / "parses" / digest / parse_id / "blocks.jsonl"
+        return self.root / ".memento" / "parses" / digest / parse_id

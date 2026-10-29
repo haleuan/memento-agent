@@ -74,6 +74,15 @@ class AchievementItem(BaseModel):
         ),
     )
 
+    certificate_number: StrictStr | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Certificate or credential number exactly as stated in the source document. "
+            "Leave null when the source does not provide one."
+        ),
+    )
+
     description: StrictStr | None = Field(
         default=None,
         description=(

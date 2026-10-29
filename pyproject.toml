@@ -10,7 +10,7 @@ dependencies = [
     "openai>=3.35.1",
     "pydantic>=2.14.1",
     "python-dotenv>=1.2.4",
-    "pyyaml>=6.0.3",
+    "tomli-w>=1.2.0",
 ]
 
 [project.scripts]

@@ -147,9 +147,8 @@ class Evidence(BaseModel):
 
     quote: StrictStr | None = Field(
         default=None,
-        description="Text extracted from the source that supports this record's claims. "
-        "This should be a verbatim quote from OCR output or a human transcription. "
-        "Validation will check whether this quote appears in the parsed source text.",
+        description="Optional verbatim text from the source that provides context for locating supporting information. "
+        "Current validation checks that the source exists and does not require quote matching against parse blocks.",
     )
 
     supports: list[StrictStr] = Field(
@@ -209,7 +208,6 @@ class RecordEnvelope(BaseModel, Generic[RecordData]):
         - Time information (occurred)
         - Evidence links (evidence)
         - Human verification (verification)
-        - Free-form narrative (body)
     """
 
     model_config = ConfigDict(
@@ -226,7 +224,7 @@ class RecordEnvelope(BaseModel, Generic[RecordData]):
         alias="schema",
         description="Schema version for the 'data' payload. Format: '<type>/<version>'. "
         "Each record type (achievement, note, task) has its own version counter. "
-        "This field uses the alias 'schema' in serialized YAML to avoid colliding "
+        "This field uses the alias 'schema' in serialized TOML to avoid colliding "
         "with Python/Pydantic's schema-related APIs.",
     )
 
@@ -273,16 +271,4 @@ class RecordEnvelope(BaseModel, Generic[RecordData]):
         "Null means the record is unverified (draft state). "
         "Setting this field typically requires an interactive CLI command rather than "
         "being freely writable by agents.",
-    )
-
-    body: StrictStr = Field(
-        default="",
-        description="Optional free-form narrative written by the user or agent. "
-        "In YAML, this appears as the content after the front matter delimiter (---). "
-        "Use this for:\n"
-        "- Personal reflections on the experience\n"
-        "- Context that doesn't fit in structured fields\n"
-        "- Detailed descriptions of your role (if not using data.description)\n"
-        "When generating application materials, clearly mark body content as self-reported "
-        "rather than document-verified.",
     )

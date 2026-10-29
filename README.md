@@ -1,20 +1,39 @@
-# Memento Agent v0.1
+# Memento Agent
 
-A small provenance-backed record checker. Records are strict TOML with typed
-achievement data. For document-derived records, `memento check` verifies that
-each evidence quote appears in the referenced source parse block after
-whitespace normalization. User-provided records may omit evidence.
+A provenance-backed personal memory system. Source files are stored by content hash, and structured records refer to their supporting source files through `evidence.source`.
 
-```sh
-uv sync --dev
-uv run memento check records/achievement/ach_<ULID>.toml
-uv run ruff check src tests
-uv run pyright
+## Workspace
+
+Initialize a workspace with `init_workspace()`. Achievement records are structured TOML files stored as:
+
+```text
+records/<record-type>/<record-id>.toml
 ```
 
-The checker prints `OK` and exits `0` for valid records. It prints readable
-errors and exits `1` otherwise. It does not write to the workspace.
+Original supporting documents are imported to `sources/<hash-prefix>/<sha256>.<extension>`. Parse snapshots are optional derived text artifacts stored under `.memento/parses/<source-digest>/<parse-id>/`:
 
-Python 3.11+, Pydantic v2, and pytest are used. The `mementoagent` command is an
-alias for `memento`. Concrete OCR engines, verification seals, extraction,
-review, and generation are outside v0.1.
+```text
+metadata.toml
+content.md
+```
+
+Snapshot metadata and records are structured TOML. `content.md` preserves the parser's raw text output. Record evidence points directly to the original source file. Page and quote may be included as optional context, but validation only checks that the referenced source exists; it does not require parse snapshots or match quotes to parse blocks.
+
+## Check a Record
+
+From inside a workspace, validate one achievement record with:
+
+```sh
+uv run memento check records/achievement/ach_<ULID>.toml
+```
+
+The command prints `OK` and exits with status `0` for a valid record. It prints validation or loading errors to stderr and exits with status `1`. Argument errors exit with status `2`.
+
+Run project checks with:
+
+```sh
+uv run pytest
+uv run pyright
+uv run ruff check .
+uv run ruff format --check .
+```
