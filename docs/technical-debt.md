@@ -35,18 +35,20 @@ comment should be brief and reference the relevant debt ID.
 
 ## TD-003: Parse Snapshot Path Contract
 
-- **Status**: `accepted`
-- **Location**: `src/mementoagent/workspace/discovery.py`, `WorkspacePaths.blocks_path`
-- **Current state and impact**: The reserved parse path is fixed to `blocks.jsonl`, which encodes an old block-level snapshot assumption even though current evidence validation only requires source-level provenance.
-- **Reason deferred**: Parser adapters and the parse snapshot format have not been designed yet.
-- **Review trigger**: When the parse snapshot contract or the first parser adapter is implemented.
-- **Completion criteria**: Parse snapshot paths represent the chosen snapshot contract, block data is optional, and no evidence validation depends on a block identifier.
+- **Status**: `done`
+- **Location**: `src/mementoagent/workspace/discovery.py`, `WorkspacePaths.blocks_path` (replaced by `parse_snapshot_dir`)
+- **Current state and impact**: The previous path method assumed each snapshot was `blocks.jsonl`, which encoded a block-level contract that current evidence validation did not require.
+- **Reason deferred**: It was deferred until the parse snapshot format was defined.
+- **Review trigger**: Triggered when the parse snapshot contract was implemented.
+- **Completion criteria**: Snapshot paths represent the chosen contract, block data is optional, and evidence validation does not depend on block identifiers.
+- **Resolution**: Parse snapshots use `metadata.toml` and raw `content.md` under `.memento/parses/<source-digest>/<parse-id>/`; the old `blocks_path` method was replaced, with no block-level evidence requirement.
 
 ## TD-004: Documentation Contract Drift
 
-- **Status**: `accepted`
+- **Status**: `done`
 - **Location**: `README.md` and the historical sections of `AGENTS.md`
-- **Current state and impact**: Some documentation still describes TOML records and block-level quote matching, while the implementation uses YAML front matter and source-level evidence validation. This can lead future contributors to implement the wrong contract.
-- **Reason deferred**: The current work has focused on stabilizing the storage and validation code rather than revising project documentation.
-- **Review trigger**: Before the next user-facing release or documentation update.
-- **Completion criteria**: Documentation consistently describes YAML record files, source-level evidence, optional page/quote metadata, and the actual available commands.
+- **Current state and impact**: The previous documentation described TOML records and block-level quote matching, which could lead contributors to implement a contract different from the code.
+- **Reason deferred**: Documentation was deferred while storage and validation behavior was being stabilized.
+- **Review trigger**: Triggered during the parse snapshot contract update.
+- **Completion criteria**: Documentation consistently describes structured TOML records, source-level evidence, optional page/quote metadata, and the available commands.
+- **Resolution**: README and AGENTS.md now describe pure TOML records, source-level evidence validation, TOML parse metadata with raw Markdown parse content, and the current command surface. The YAML front matter format was replaced as part of the structured-record redesign.
