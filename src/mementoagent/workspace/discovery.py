@@ -74,7 +74,7 @@ class WorkspacePaths:
         directory = self.root / "sources" / digest[:2]
         matches = sorted(
             path
-            for path in directory.glob(f"{digest}.*")
+            for path in (directory / digest, *directory.glob(f"{digest}.*"))
             if path.is_file() and path.suffix != ".json"
         )
         return matches[0] if matches else None

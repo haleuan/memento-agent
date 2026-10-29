@@ -63,6 +63,16 @@ def test_workspace_paths_returns_none_for_missing_source_file(tmp_path: Path) ->
     assert WorkspacePaths(tmp_path).find_source_file_by_hash(VALID_HASH) is None
 
 
+def test_workspace_paths_finds_extensionless_source_file(tmp_path: Path) -> None:
+    """Return an extensionless source file stored under its exact digest name."""
+    source_directory = tmp_path / "sources" / VALID_DIGEST[:2]
+    source_directory.mkdir(parents=True)
+    source_file = source_directory / VALID_DIGEST
+    source_file.write_bytes(b"certificate")
+
+    assert WorkspacePaths(tmp_path).find_source_file_by_hash(VALID_HASH) == source_file
+
+
 @pytest.mark.parametrize(
     "hash_identifier",
     ["sha256:", "sha256:" + "A" * 64, "sha256:" + "a" * 63, "md5:" + "a" * 64],
