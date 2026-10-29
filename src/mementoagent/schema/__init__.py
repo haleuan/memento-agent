@@ -9,6 +9,7 @@ from .envelope import (
     SchemaVersion,
     Verification,
 )
+from .parsing import ParseSnapshot, ParseSnapshotMetadata
 from .types import PartialDate
 
 ENVELOPE_SCHEMA_VERSION = "envelope/1"
@@ -20,6 +21,8 @@ __all__ = [
     "AchievementItem",
     "Evidence",
     "HashId",
+    "ParseSnapshot",
+    "ParseSnapshotMetadata",
     "RecordEnvelope",
     "RecordId",
     "SchemaVersion",
