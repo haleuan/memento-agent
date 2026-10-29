@@ -72,6 +72,8 @@ class WorkspacePaths:
         """
         digest = self._extract_hex_digest(hash_file_identifier)
         directory = self.root / "sources" / digest[:2]
+
+        # TODO: Consider it's not `.json` files friendly to ignore them here, but they are not the source files themselves.
         matches = sorted(
             path
             for path in (directory / digest, *directory.glob(f"{digest}.*"))
