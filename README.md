@@ -21,7 +21,7 @@ Snapshot metadata and records are structured TOML. `content.md` preserves the pa
 
 ## Achievement Extraction
 
-`AchievementExtractor` reads a `ParseSnapshot` and returns an in-memory structured achievement draft. It uses the existing structured OpenAI provider and validates the result with the `AchievementItem` schema. The source hash comes from snapshot metadata, and user-authored descriptions are not extracted. Event dates are not included yet because date interpretation belongs in deterministic code. The extractor does not create or save a record; approval and record materialization are separate steps.
+`AchievementExtractor` reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Event dates are not included yet because date interpretation belongs in deterministic code. The extractor does not create or save a record; approval and record materialization are separate steps.
 
 ## MinerU Parser Configuration
 

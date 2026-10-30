@@ -1,6 +1,13 @@
 """Extract structured achievement data from a parse snapshot."""
 
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictStr,
+    ValidationError,
+    model_validator,
+)
 
 from mementoagent.providers import OpenAIProvider
 from mementoagent.schema import AchievementItem, HashId, ParseSnapshot
@@ -10,12 +17,22 @@ class AchievementExtractionError(ValueError):
     """Raised when a provider response cannot produce an achievement draft."""
 
 
+class DescriptionSuggestion(BaseModel):
+    """A user-editable description candidate derived from source facts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: StrictStr = Field(min_length=1)
+    rationale: StrictStr = Field(min_length=1)
+
+
 class AchievementExtraction(BaseModel):
     """Structured fields extracted from one parse snapshot."""
 
     model_config = ConfigDict(extra="forbid")
 
     data: AchievementItem
+    description_suggestion: DescriptionSuggestion | None = None
 
     @model_validator(mode="after")
     def reject_user_description(self) -> "AchievementExtraction":
@@ -32,6 +49,7 @@ class AchievementDraft(BaseModel):
 
     data: AchievementItem
     source: HashId
+    description_suggestion: DescriptionSuggestion | None = None
 
     @model_validator(mode="after")
     def reject_user_description(self) -> "AchievementDraft":
@@ -46,6 +64,10 @@ Use only facts explicitly supported by the document. Preserve names, titles,
 organizations, levels, and certificate numbers as written. Leave optional
 fields null when the document does not state them. Do not infer missing facts.
 Leave data.description null because it is written by the user later.
+If a concise description draft can be safely based on the document facts,
+return it as description_suggestion with a rationale that identifies what the
+user still needs to confirm. Do not invent personal responsibilities, impact,
+metrics, or other facts. Return null when no safe suggestion is possible.
 """
 
 
@@ -96,4 +118,5 @@ class AchievementExtractor:
         return AchievementDraft(
             data=extraction.data,
             source=snapshot.metadata.source,
+            description_suggestion=extraction.description_suggestion,
         )

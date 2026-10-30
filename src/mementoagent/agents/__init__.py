@@ -5,6 +5,7 @@ from .extraction import (
     AchievementExtraction,
     AchievementExtractionError,
     AchievementExtractor,
+    DescriptionSuggestion,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "AchievementExtraction",
     "AchievementExtractionError",
     "AchievementExtractor",
+    "DescriptionSuggestion",
 ]

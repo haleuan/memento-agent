@@ -11,6 +11,7 @@ from mementoagent.agents import (
     AchievementExtraction,
     AchievementExtractionError,
     AchievementExtractor,
+    DescriptionSuggestion,
 )
 from mementoagent.schema import (
     AchievementItem,
@@ -70,7 +71,11 @@ class FakeProvider:
         return FakeResponse(self.output)
 
 
-def make_extraction(**data: Any) -> AchievementExtraction:
+def make_extraction(
+    *,
+    description_suggestion: DescriptionSuggestion | None = None,
+    **data: Any,
+) -> AchievementExtraction:
     """Build a valid extraction result."""
     return AchievementExtraction(
         data=AchievementItem(
@@ -78,7 +83,8 @@ def make_extraction(**data: Any) -> AchievementExtraction:
             title="研究生学业奖学金",
             organization="重庆师范大学",
             **data,
-        )
+        ),
+        description_suggestion=description_suggestion,
     )
 
 
@@ -99,6 +105,26 @@ def test_extractor_returns_draft_and_injects_source() -> None:
     assert "Do not infer" in provider.instructions
 
 
+def test_extractor_keeps_description_suggestion_separate() -> None:
+    """Return a candidate description without treating it as extracted data."""
+    suggestion = DescriptionSuggestion(
+        text="获得重庆师范大学研究生学业奖学金一等奖。",
+        rationale="该表述只复述证书明确记载的奖项和等级。",
+    )
+    extraction = make_extraction(
+        description_suggestion=suggestion,
+        level_raw="一等奖",
+    )
+    provider = FakeProvider(extraction)
+
+    result = AchievementExtractor(provider, "test-model").extract(make_snapshot())
+
+    assert result.description_suggestion == suggestion
+    assert result.data.description is None
+    assert "description_suggestion" in provider.instructions
+    assert "Do not invent personal responsibilities" in provider.instructions
+
+
 def test_extractor_preserves_optional_unknown_fields_as_none() -> None:
     """Keep fields absent from the structured response unset."""
     provider = FakeProvider(make_extraction())
@@ -108,6 +134,7 @@ def test_extractor_preserves_optional_unknown_fields_as_none() -> None:
     assert result.data.level_raw is None
     assert result.data.certificate_number is None
     assert result.data.collaborators is None
+    assert result.description_suggestion is None
 
 
 def test_extractor_rejects_missing_structured_output() -> None:
@@ -137,6 +164,50 @@ def test_extractor_rejects_user_description() -> None:
 def test_extractor_rejects_invalid_structured_output() -> None:
     """Reject provider data that does not satisfy the achievement schema."""
     provider = FakeProvider({"data": {"kind": "award"}})
+
+    with pytest.raises(
+        AchievementExtractionError,
+        match="invalid achievement",
+    ):
+        AchievementExtractor(provider, "test-model").extract(make_snapshot())
+
+
+def test_extractor_rejects_extra_model_source() -> None:
+    """Do not allow the provider to choose the source hash."""
+    provider = FakeProvider(
+        {
+            "data": {
+                "kind": "award",
+                "title": "奖项",
+                "organization": "机构",
+            },
+            "source": "sha256:" + "c" * 64,
+        }
+    )
+
+    with pytest.raises(
+        AchievementExtractionError,
+        match="invalid achievement",
+    ):
+        AchievementExtractor(provider, "test-model").extract(make_snapshot())
+
+
+def test_extractor_rejects_extra_suggestion_fields() -> None:
+    """Keep suggestion output within its declared schema."""
+    provider = FakeProvider(
+        {
+            "data": {
+                "kind": "award",
+                "title": "奖项",
+                "organization": "机构",
+            },
+            "description_suggestion": {
+                "text": "建议文本",
+                "rationale": "建议依据",
+                "source": "sha256:" + "c" * 64,
+            },
+        }
+    )
 
     with pytest.raises(
         AchievementExtractionError,
