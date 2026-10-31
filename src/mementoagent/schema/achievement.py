@@ -5,6 +5,15 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 
+class AchievementReference(BaseModel):
+    """An external link or identifier supporting an achievement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["doi", "github", "pdf", "website", "certificate_id", "arxiv"]
+    url: StrictStr = Field(min_length=1)
+
+
 class AchievementItem(BaseModel):
     """A verifiable achievement or credential with supporting evidence.
 
@@ -109,11 +118,11 @@ class AchievementItem(BaseModel):
         ),
     )
 
-    references: list[dict[Literal["type", "url"], str]] | None = Field(
+    references: list[AchievementReference] | None = Field(
         default=None,
         description=(
             "External links for verification or additional information. "
-            "Each dict must have exactly two keys:\n"
+            "Each reference has exactly two fields:\n"
             "- 'type': one of 'doi', 'github', 'pdf', 'website', 'certificate_id', 'arxiv'\n"
             "- 'url': the actual link or identifier\n\n"
             "Examples:\n"

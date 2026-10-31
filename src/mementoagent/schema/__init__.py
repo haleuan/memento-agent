@@ -1,6 +1,6 @@
 """Public Pydantic schemas for the Memento data layer."""
 
-from .achievement import AchievementItem
+from .achievement import AchievementItem, AchievementReference
 from .envelope import (
     Evidence,
     HashId,
@@ -19,6 +19,7 @@ __all__ = [
     "ACHIEVEMENT_SCHEMA_VERSION",
     "ENVELOPE_SCHEMA_VERSION",
     "AchievementItem",
+    "AchievementReference",
     "Evidence",
     "HashId",
     "ParseSnapshot",

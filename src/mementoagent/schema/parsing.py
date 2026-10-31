@@ -7,7 +7,6 @@ from pydantic.types import StringConstraints
 
 from .envelope import HashId, Timestamp
 
-
 ParseId = Annotated[
     StrictStr,
     StringConstraints(pattern=r"^parse_[0-9a-f]{32}$"),

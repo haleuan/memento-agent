@@ -16,7 +16,6 @@ from pydantic.types import StringConstraints
 
 from .types import PartialDate
 
-
 _HASH_PATTERN = r"^sha256:[0-9a-f]{64}$"
 
 _RECORD_ID_PATTERN = r"^[a-z][a-z0-9-]*_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
