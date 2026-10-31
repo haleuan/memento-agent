@@ -75,7 +75,25 @@ comment should be brief and reference the relevant debt ID.
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/agents/base.py`, `src/mementoagent/agents/runtime.py`, and `src/mementoagent/agents/tools.py`
-- **Current state and impact**: The project-owned Runtime now uses the OpenAI Python SDK for synchronous Responses API calls, structured output validation, in-memory run state, and bounded function-tool execution. It does not persist sessions, resume interrupted runs, compress long contexts, perform handoffs, expose production observability, or run concrete subagents.
+- **Current state and impact**: The project-owned Runtime uses the OpenAI Python SDK for Pydantic schema adaptation and structured response parsing, while owning the synchronous Responses request loop, in-memory state, and bounded function-tool execution. Subagent tools accept string input, but no concrete subagent workflow exists. It does not persist sessions, resume interrupted runs, compress long contexts, perform handoffs, expose production observability, or define shared execution budgets for nested runs.
 - **Reason deferred**: The current extraction task only needs a bounded synchronous run. Durable state, richer context management, handoffs, and asynchronous execution would enlarge the runtime contract before a concrete workflow requires them.
 - **Review trigger**: When a task needs a real subagent, multi-turn conversation state, human interruption/resume, long-context management, handoff ownership, asynchronous execution, or production run observability.
-- **Completion criteria**: Each required capability has an explicit state and failure contract, and an end-to-end task has offline tests for execution limits, resumption, subagent boundaries, context management, and sensitive-data handling.
+- **Completion criteria**: Each required capability has an explicit state and failure contract, and an end-to-end task has offline tests for execution limits, nested run budgets, resumption, subagent boundaries, context management, and sensitive-data handling.
+
+## TD-008: Evaluate Strict Static Type Checking
+
+- **Status**: `accepted`
+- **Location**: `pyproject.toml`, `AGENTS.md`, and production Python annotations
+- **Current state and impact**: Pyright currently uses `standard` mode, and the contributor documentation now states that actual baseline. Some unknown or partially annotated types that strict mode would report remain outside the enabled checks.
+- **Reason deferred**: This repair keeps the existing type-checking baseline while fixing concrete protocol and data-contract defects. A project-wide strict migration could require unrelated annotation changes and deserves a separate review.
+- **Review trigger**: Before broadening the public Runtime/tool interfaces or declaring the project strict-type-checked.
+- **Completion criteria**: Strict diagnostics have been assessed, useful annotation gaps are resolved without broad suppression or unnecessary casts, and the chosen mode passes Pyright with matching documentation.
+
+## TD-009: Hard Wall-Clock Deadlines for Parser Requests
+
+- **Status**: `accepted`
+- **Location**: `src/mementoagent/parsers/mineru.py` and `src/mementoagent/http.py`
+- **Current state and impact**: MinerU checks its time budget before requests and before returning success, and bounds request waits by the remaining budget. HTTPX timeouts apply to individual waiting phases, so an in-flight synchronous upload or download can run past the deadline while continuing to make progress. The final check rejects that late result but cannot interrupt the request at the deadline.
+- **Reason deferred**: The current synchronous parser needs bounded polling and honest timeout semantics. Cancellable or streaming requests would expand the transport contract beyond this repair.
+- **Review trigger**: When a user-facing workflow requires a hard elapsed-time guarantee or cancellation of slow uploads/downloads.
+- **Completion criteria**: The transport and parser define interruption and resource-cleanup behavior, enforce the required elapsed-time bound during active I/O, and have offline tests for slow-progress requests and cancellation without partial-success snapshots.

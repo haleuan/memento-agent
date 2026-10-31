@@ -25,9 +25,18 @@ Snapshot metadata and records are structured TOML. `content.md` preserves the pa
 
 ## Agent Runtime
 
-The project uses the official OpenAI Python SDK behind a small local Runtime. A task Agent declares its instructions, structured output type, input conversion, and optional tools or subagents. The Runtime owns synchronous Responses API requests, structured output validation, an in-memory run state, bounded function-tool execution, and error boundaries, then returns only the task's typed output. It does not expose SDK response objects, usage, or credentials to domain code.
+The project uses the official OpenAI Python SDK behind a small local Runtime. A task Agent declares its instructions, structured output type, input conversion, and optional tools or subagents. The SDK adapts Pydantic schemas and parses structured responses; the Runtime owns the synchronous request loop, in-memory run state, tool dispatch, execution limits, and error boundaries. It returns only the task's typed output and does not expose SDK response objects, usage, or credentials to domain code.
 
 Tools use explicit `ToolSpec` declarations. A manager can compose future bounded subagents as internal tools, while the manager retains control of the conversation. Session persistence, handoffs, ReAct orchestration, asynchronous execution, and concrete subagent implementations are not part of the current implementation.
+
+Use `AgentRuntime` as a context manager when it creates its own OpenAI client:
+
+```python
+from mementoagent.agents import AchievementExtractor, AgentRuntime
+
+with AgentRuntime(model=model, api_key=api_key) as runtime:
+    draft = AchievementExtractor(runtime).extract(snapshot)
+```
 
 ## Achievement Draft Review
 
@@ -44,6 +53,17 @@ explicit api_base_url argument
 ```
 
 Set `MEMENTO_MINERU_API_BASE_URL` when using a private MinerU deployment or a different endpoint. The application entry point may call `load_dotenv()` before constructing the parser; the parser library itself does not load `.env` files. The HTTP transport only sends requests, while the MinerU adapter owns authentication, polling states, signed upload URLs, and result handling.
+
+```python
+from mementoagent.parsers import MineruParser
+
+with MineruParser(api_key=api_key) as parser:
+    content = parser.parse(source_path)
+```
+
+`AgentRuntime`, `MineruParser`, and `HttpxTransport` provide `close()` and context managers. Each closes only the resources it creates. The caller remains responsible for closing an injected client or transport; a parser or runtime can reuse its connections across multiple calls inside the context.
+
+MinerU's `timeout` is a time budget checked between stages and before returning a successful result. Requests use the remaining budget for their waiting time, capped by the adapter's per-request timeout. This does not forcibly interrupt an in-flight synchronous request; a stage that finishes after the deadline is rejected rather than returned as a success.
 
 ## Check a Record
 
@@ -63,3 +83,5 @@ uv run pyright
 uv run ruff check .
 uv run ruff format --check .
 ```
+
+Pyright currently uses `standard` mode. Ruff checks docstrings, basic errors, unused imports, and import ordering (`D`, `E4`, `E7`, `E9`, `F`, and `I`).

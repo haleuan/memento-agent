@@ -25,8 +25,12 @@ keep the Agent runtime in Memento. The runtime owns the following boundaries:
   optional tools or composable subagents.
 - `ToolSpec` explicitly declares a tool name, description, Pydantic argument
   model, and callable handler.
-- `AgentRuntime` creates or accepts an OpenAI client, sends Responses API
-  requests, validates structured output, and runs a bounded tool loop.
+- `AgentRuntime` creates or accepts an OpenAI client and owns the Responses
+  request loop, tool dispatch, execution limits, and output/error boundaries.
+- The SDK's `responses.parse()` and public Pydantic tool helper adapt schemas
+  to the Responses protocol and parse typed results. The Runtime replays SDK
+  output items through the SDK serializer, including tool call identifiers and
+  reasoning items, without adding SDK-only parsed fields to request payloads.
 - `RunState` is in-memory and scoped to one invocation. The public runtime API
   returns only the task's validated output, not SDK responses, usage, or traces.
 
