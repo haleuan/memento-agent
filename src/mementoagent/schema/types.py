@@ -3,7 +3,7 @@
 import calendar
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 
 class PartialDate(BaseModel):
@@ -23,13 +23,21 @@ class PartialDate(BaseModel):
         - Certificate states "2024-10-15": PartialDate(year=2024, month=10, day=15, precision="day")
     """
 
-    year: int = Field(description="Four-digit year. Must be between 1900 and 2100.")
-    month: int | None = Field(
+    model_config = ConfigDict(extra="forbid")
+
+    year: StrictInt = Field(
+        ge=1900, le=2100, description="Four-digit year. Must be between 1900 and 2100."
+    )
+    month: StrictInt | None = Field(
         default=None,
+        ge=1,
+        le=12,
         description="Month (1-12). Required when precision is 'month' or 'day'.",
     )
-    day: int | None = Field(
+    day: StrictInt | None = Field(
         default=None,
+        ge=1,
+        le=31,
         description="Day of month (1-31). Required when precision is 'day'.",
     )
     precision: Literal["year", "month", "day"] = Field(
@@ -40,23 +48,21 @@ class PartialDate(BaseModel):
     @model_validator(mode="after")
     def validate_consistency(self) -> "PartialDate":
         """Ensure precision matches the presence of month and day fields."""
+        if self.precision == "year" and (
+            self.month is not None or self.day is not None
+        ):
+            raise ValueError("precision='year' does not allow month or day")
         if self.precision == "month" and self.month is None:
             raise ValueError("precision='month' requires month to be set")
+        if self.precision == "month" and self.day is not None:
+            raise ValueError("precision='month' does not allow day")
         if self.precision == "day" and (self.month is None or self.day is None):
             raise ValueError("precision='day' requires both month and day to be set")
-
-        # Validate year range
-        if not (1900 <= self.year <= 2100):
-            raise ValueError(f"year must be between 1900 and 2100, got {self.year}")
-
-        # Validate month range
-        if self.month is not None and not (1 <= self.month <= 12):
-            raise ValueError(f"month must be between 1 and 12, got {self.month}")
 
         # Validate day range against calendar
         if self.day is not None and self.month is not None:
             max_day = calendar.monthrange(self.year, self.month)[1]
-            if not (1 <= self.day <= max_day):
+            if self.day > max_day:
                 raise ValueError(
                     f"day must be between 1 and {max_day} for {self.year}-{self.month:02d}, "
                     f"got {self.day}"
