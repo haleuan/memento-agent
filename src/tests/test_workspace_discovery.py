@@ -10,7 +10,6 @@ from mementoagent.workspace import (
     find_workspace,
 )
 
-
 VALID_DIGEST = "ab" * 32
 VALID_HASH = f"sha256:{VALID_DIGEST}"
 

@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from io import BytesIO
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
-from typing import BinaryIO
-from unittest.mock import Mock
 import zipfile
+from collections.abc import Callable, Mapping
+from io import BytesIO
+from pathlib import Path
+from typing import Any, BinaryIO
+from unittest.mock import Mock
 
 import httpx
 import pytest
 from dotenv import load_dotenv
 
+from mementoagent.http import HttpxTransport
 from mementoagent.parsers.mineru import MineruParser, MineruParserError
 from mementoagent.parsers.pipeline import parse_and_save_snapshot
-from mementoagent.http import HttpxTransport
 from mementoagent.workspace import (
     find_workspace,
     import_source,
@@ -83,6 +83,85 @@ def test_httpx_transport_forwards_request_arguments() -> None:
         content=b"body",
         timeout=3.5,
     )
+
+
+@pytest.mark.parametrize("raise_in_context", [False, True])
+def test_httpx_transport_closes_owned_client(
+    monkeypatch: pytest.MonkeyPatch, raise_in_context: bool
+) -> None:
+    """Close internally created clients on normal and exceptional exit."""
+    client = Mock(spec=httpx.Client)
+    monkeypatch.setattr("mementoagent.http.httpx.Client", lambda: client)
+
+    if raise_in_context:
+        with pytest.raises(RuntimeError, match="context failed"):
+            with HttpxTransport():
+                raise RuntimeError("context failed")
+    else:
+        with HttpxTransport() as transport:
+            assert transport._client is client
+            client.close.assert_not_called()
+
+    client.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("raise_in_context", [False, True])
+def test_httpx_transport_keeps_injected_client_open(
+    raise_in_context: bool,
+) -> None:
+    """Leave an injected client's lifetime to its caller."""
+    client = Mock(spec=httpx.Client)
+    transport = HttpxTransport(client)
+
+    if raise_in_context:
+        with pytest.raises(RuntimeError, match="context failed"):
+            with transport:
+                raise RuntimeError("context failed")
+    else:
+        with transport:
+            pass
+    transport.close()
+
+    client.close.assert_not_called()
+
+
+@pytest.mark.parametrize("raise_in_context", [False, True])
+def test_mineru_parser_closes_default_transport(
+    monkeypatch: pytest.MonkeyPatch, raise_in_context: bool
+) -> None:
+    """Close the default transport after either kind of context exit."""
+    transport = Mock(spec=HttpxTransport)
+    monkeypatch.setattr("mementoagent.parsers.mineru.HttpxTransport", lambda: transport)
+
+    if raise_in_context:
+        with pytest.raises(RuntimeError, match="context failed"):
+            with MineruParser("secret"):
+                raise RuntimeError("context failed")
+    else:
+        with MineruParser("secret"):
+            transport.close.assert_not_called()
+
+    transport.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("raise_in_context", [False, True])
+def test_mineru_parser_keeps_injected_transport_open(
+    raise_in_context: bool,
+) -> None:
+    """Do not take ownership of a caller-provided transport."""
+    transport = Mock(spec=HttpxTransport)
+    parser = MineruParser("secret", transport=transport)
+
+    if raise_in_context:
+        with pytest.raises(RuntimeError, match="context failed"):
+            with parser:
+                raise RuntimeError("context failed")
+    else:
+        with parser:
+            pass
+    parser.close()
+
+    transport.close.assert_not_called()
 
 
 class RecordingTransport:
@@ -199,13 +278,78 @@ def test_mineru_base_url_explicit_value_overrides_environment(
         "MEMENTO_MINERU_API_BASE_URL", "https://environment.example/api/v4/"
     )
 
-    environment_parser = MineruParser("secret")
-    explicit_parser = MineruParser(
-        "secret", api_base_url="https://explicit.example/api/v4/"
-    )
+    with (
+        MineruParser("secret") as environment_parser,
+        MineruParser(
+            "secret", api_base_url="https://explicit.example/api/v4/"
+        ) as explicit_parser,
+    ):
+        assert environment_parser._api_base_url == "https://environment.example/api/v4"
+        assert explicit_parser._api_base_url == "https://explicit.example/api/v4"
 
-    assert environment_parser._api_base_url == "https://environment.example/api/v4"
-    assert explicit_parser._api_base_url == "https://explicit.example/api/v4"
+
+def test_mineru_parser_reuses_default_transport_across_parses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep the same owned transport alive until the parser scope ends."""
+    source_path = tmp_path / "source.pdf"
+    source_path.write_bytes(b"source")
+    transport = RecordingTransport(source_path, make_result_zip("# reused\n"))
+    close = Mock()
+    monkeypatch.setattr(transport, "close", close, raising=False)
+    monkeypatch.setattr("mementoagent.parsers.mineru.HttpxTransport", lambda: transport)
+
+    with MineruParser("secret", poll_interval=0) as parser:
+        assert parser.parse(source_path) == "# reused\n"
+        assert parser.parse(source_path) == "# reused\n"
+        close.assert_not_called()
+
+    assert len(transport.calls) == 8
+    close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("expired_stage", ["download", "decode"])
+def test_mineru_parser_rejects_result_that_exceeds_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    expired_stage: str,
+) -> None:
+    """Reject successful results when downloading or decoding used the budget."""
+    source_path = tmp_path / "source.pdf"
+    source_path.write_bytes(b"source")
+    transport = RecordingTransport(source_path, make_result_zip())
+    clock = [0.0]
+    monkeypatch.setattr("mementoagent.parsers.mineru.time.monotonic", lambda: clock[0])
+
+    if expired_stage == "download":
+        original_request = transport.request
+
+        def request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+            response = original_request(method, url, **kwargs)
+            if url == "https://download.example/result.zip":
+                clock[0] = 2.0
+            return response
+
+        monkeypatch.setattr(transport, "request", request)
+    else:
+        original_read = zipfile.ZipFile.read
+
+        class SlowDecodeBytes(bytes):
+            """Advance the fake clock when the result text is decoded."""
+
+            def decode(self, encoding: str = "utf-8", errors: str = "strict") -> str:
+                """Simulate decoding that exhausts the remaining budget."""
+                clock[0] = 2.0
+                return super().decode(encoding, errors)
+
+        def read(archive: zipfile.ZipFile, name: str) -> bytes:
+            return SlowDecodeBytes(original_read(archive, name))
+
+        monkeypatch.setattr(zipfile.ZipFile, "read", read)
+
+    with MineruParser("secret", transport=transport, timeout=1) as parser:
+        with pytest.raises(MineruParserError, match="timed out"):
+            parser.parse(source_path)
 
 
 def test_mineru_parser_uploads_polls_and_extracts_markdown(
@@ -643,14 +787,13 @@ def test_mineru_parser_rejects_invalid_result_archive(
 def test_parse_and_save_snapshot_rejects_missing_source(tmp_path: Path) -> None:
     """Reject a source hash that is not present in workspace storage."""
     workspace_root = init_workspace(tmp_path / "workspace")
-    parser = MineruParser("secret")
-
-    with pytest.raises(FileNotFoundError):
-        parse_and_save_snapshot(
-            workspace_root,
-            "sha256:" + "a" * 64,
-            parser,
-        )
+    with MineruParser("secret") as parser:
+        with pytest.raises(FileNotFoundError):
+            parse_and_save_snapshot(
+                workspace_root,
+                "sha256:" + "a" * 64,
+                parser,
+            )
 
 
 def test_parse_failure_does_not_create_snapshot(tmp_path: Path) -> None:
@@ -690,15 +833,15 @@ def test_mineru_live_api_saves_workspace_snapshots(tmp_path: Path) -> None:
     source_paths = sorted(path for path in inbox.iterdir() if path.is_file())
     assert len(source_paths) == 3
 
-    parser = MineruParser(api_key)
-    for source_path in source_paths:
-        staged_copy = tmp_path / source_path.name
-        shutil.copy2(source_path, staged_copy)
-        source_id = import_source(workspace_root, staged_copy)
-        snapshot_dir = parse_and_save_snapshot(workspace_root, source_id, parser)
-        snapshot = load_parse_snapshot(snapshot_dir)
+    with MineruParser(api_key) as parser:
+        for source_path in source_paths:
+            staged_copy = tmp_path / source_path.name
+            shutil.copy2(source_path, staged_copy)
+            source_id = import_source(workspace_root, staged_copy)
+            snapshot_dir = parse_and_save_snapshot(workspace_root, source_id, parser)
+            snapshot = load_parse_snapshot(snapshot_dir)
 
-        assert snapshot.metadata.source == source_id
-        assert snapshot.metadata.parser == "mineru"
-        assert snapshot.metadata.parser_version == parser.version
-        assert (snapshot_dir / "content.md").stat().st_size > 0
+            assert snapshot.metadata.source == source_id
+            assert snapshot.metadata.parser == "mineru"
+            assert snapshot.metadata.parser_version == parser.version
+            assert (snapshot_dir / "content.md").stat().st_size > 0

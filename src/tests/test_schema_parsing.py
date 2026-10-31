@@ -5,7 +5,6 @@ from pydantic import ValidationError
 
 from mementoagent.schema import ParseSnapshot, ParseSnapshotMetadata
 
-
 VALID_HASH = "sha256:" + "a" * 64
 VALID_PARSE_ID = "parse_" + "b" * 32
 CREATED_AT = "2025-01-12T09:30:00+08:00"

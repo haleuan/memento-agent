@@ -1,16 +1,20 @@
 """Tests for structured TOML record file I/O."""
 
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from mementoagent.schema import AchievementItem, Evidence, RecordEnvelope
+from mementoagent.schema import (
+    AchievementItem,
+    AchievementReference,
+    Evidence,
+    RecordEnvelope,
+)
 from mementoagent.schema.envelope import TimeRange
 from mementoagent.schema.types import PartialDate
 from mementoagent.workspace import load_record, save_record
-
 
 VALID_RECORD_ID = "ach_01JBX7Q3M8K2N5R9V4W6Y0ZDEF"
 VALID_HASH = "sha256:" + "a" * 64
@@ -64,6 +68,25 @@ def test_load_record_round_trips_structured_record(tmp_path: Path) -> None:
     loaded = load_record(path, AchievementItem)
 
     assert loaded == record
+
+
+def test_record_round_trips_reference_tables(tmp_path: Path) -> None:
+    """Keep typed references in the existing two-field TOML representation."""
+    record = make_record()
+    record.data.references = [
+        AchievementReference(type="certificate_id", url="CERT-123"),
+        AchievementReference(type="doi", url="10.1234/example"),
+    ]
+    path = save_record(tmp_path, record)
+
+    with path.open("rb") as record_file:
+        data = tomllib.load(record_file)
+
+    assert data["data"]["references"] == [
+        {"type": "certificate_id", "url": "CERT-123"},
+        {"type": "doi", "url": "10.1234/example"},
+    ]
+    assert load_record(path, AchievementItem) == record
 
 
 def test_record_rejects_legacy_body_field() -> None:

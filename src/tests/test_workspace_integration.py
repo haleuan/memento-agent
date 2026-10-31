@@ -10,7 +10,6 @@ from mementoagent.workspace import (
     save_record,
 )
 
-
 RECORD_ID = "ach_01JBX7Q3M8K2N5R9V4W6Y0ZDEF"
 CREATED_AT = "2025-01-12T09:30:00+08:00"
 

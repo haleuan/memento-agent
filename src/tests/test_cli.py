@@ -9,7 +9,6 @@ from mementoagent.cli import main
 from mementoagent.schema import AchievementItem, Evidence, RecordEnvelope
 from mementoagent.workspace import import_source, init_workspace, save_record
 
-
 RECORD_ID = "ach_01JBX7Q3M8K2N5R9V4W6Y0ZDEF"
 CREATED_AT = "2025-01-12T09:30:00+08:00"
 SOURCE_ID = "sha256:" + "a" * 64
@@ -109,6 +108,26 @@ def test_main_check_reports_missing_record(
     assert result == 1
     assert captured.out == ""
     assert captured.err.startswith("error: ")
+
+
+@pytest.mark.parametrize(
+    "schema_version", ["note/1", "achievement/2", "achievement/999"]
+)
+def test_main_check_rejects_unsupported_schema(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], schema_version: str
+) -> None:
+    """Reject a different schema even when its payload fits AchievementItem."""
+    workspace_root = init_workspace(tmp_path / "workspace")
+    record = make_record(provenance="user")
+    record.schema_version = schema_version
+    record_path = save_record(workspace_root, record)
+
+    result = main(["check", str(record_path)])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert captured.out == ""
+    assert captured.err == f"error: unsupported achievement schema: {schema_version}\n"
 
 
 @pytest.mark.parametrize(

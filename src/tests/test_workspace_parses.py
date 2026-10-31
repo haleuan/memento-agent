@@ -1,8 +1,8 @@
 """Tests for parse snapshot persistence."""
 
-from pathlib import Path
 import re
 import tomllib
+from pathlib import Path
 
 import pytest
 

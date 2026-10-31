@@ -15,7 +15,6 @@ from mementoagent.schema import (
 from mementoagent.schema.envelope import TimeRange, Timestamp
 from mementoagent.schema.types import PartialDate
 
-
 VALID_HASH = "sha256:" + "a" * 64
 VALID_RECORD_ID = "ach_01JBX7Q3M8K2N5R9V4W6Y0ZDEF"
 

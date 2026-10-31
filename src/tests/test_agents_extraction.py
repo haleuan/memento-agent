@@ -19,7 +19,6 @@ from mementoagent.schema import (
     ParseSnapshotMetadata,
 )
 
-
 SOURCE = "sha256:" + "a" * 64
 
 

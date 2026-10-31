@@ -6,7 +6,6 @@ from typing import Literal
 from mementoagent.schema import AchievementItem, Evidence, RecordEnvelope
 from mementoagent.validation import validate_record
 
-
 RECORD_ID = "ach_01JBX7Q3M8K2N5R9V4W6Y0ZDEF"
 CREATED_AT = "2025-01-12T09:30:00+08:00"
 SOURCE_ID = "sha256:" + "a" * 64

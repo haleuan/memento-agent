@@ -50,6 +50,44 @@ def test_partial_date_rejects_missing_precision_fields(
         PartialDate(year=year, month=month, day=day, precision=precision)
 
 
+@pytest.mark.parametrize(
+    ("month", "day", "precision"),
+    [(1, None, "year"), (None, 1, "year"), (1, 1, "year"), (1, 1, "month")],
+)
+def test_partial_date_rejects_fields_beyond_precision(
+    month: int | None, day: int | None, precision: str
+) -> None:
+    """Reject values that claim more date detail than their precision."""
+    with pytest.raises(ValidationError):
+        PartialDate.model_validate(
+            {"year": 2024, "month": month, "day": day, "precision": precision}
+        )
+
+
+@pytest.mark.parametrize("field", ["year", "month", "day"])
+@pytest.mark.parametrize("value", [True, "1", 1.0])
+def test_partial_date_rejects_non_integer_types(field: str, value: object) -> None:
+    """Reject coercible values instead of silently changing their types."""
+    data: dict[str, object] = {"year": 2024, "month": 1, "day": 1, "precision": "day"}
+    data[field] = value
+
+    with pytest.raises(ValidationError):
+        PartialDate.model_validate(data)
+
+
+def test_partial_date_rejects_extra_fields() -> None:
+    """Reject metadata that is outside the partial-date contract."""
+    with pytest.raises(ValidationError):
+        PartialDate.model_validate({"year": 2024, "precision": "year", "quarter": 1})
+
+
+def test_partial_date_accepts_leap_day() -> None:
+    """Preserve a valid leap day without losing precision."""
+    result = PartialDate(year=2024, month=2, day=29, precision="day")
+
+    assert str(result) == "2024-02-29"
+
+
 @pytest.mark.parametrize("year", [1899, 2101])
 def test_partial_date_rejects_year_outside_allowed_range(year: int) -> None:
     """Reject years outside the supported 1900 through 2100 range."""

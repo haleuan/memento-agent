@@ -12,7 +12,6 @@ from mementoagent.agents import (
 )
 from mementoagent.schema import AchievementItem
 
-
 SOURCE = "sha256:" + "a" * 64
 
 

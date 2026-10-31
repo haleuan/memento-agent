@@ -75,3 +75,44 @@ def test_init_workspace_rejects_existing_memento_directory(tmp_path: Path) -> No
         init_workspace(target)
 
     assert str(error.value) == f"Workspace already exists at {target.resolve()}"
+
+
+@pytest.mark.parametrize("name", ["inbox", "sources", "records", "outputs"])
+@pytest.mark.parametrize("entry_type", ["directory", "file"])
+def test_init_workspace_rejects_conflicts_before_creating_paths(
+    tmp_path: Path, name: str, entry_type: str
+) -> None:
+    """Leave existing contents unchanged and allow retry after removing a conflict."""
+    target = tmp_path / "workspace"
+    target.mkdir()
+    conflict = target / name
+    if entry_type == "directory":
+        conflict.mkdir()
+        original = conflict / "original.txt"
+    else:
+        original = conflict
+    original.write_text("preserve me", encoding="utf-8")
+
+    with pytest.raises(FileExistsError):
+        init_workspace(target)
+
+    assert original.read_text(encoding="utf-8") == "preserve me"
+    assert list(target.iterdir()) == [conflict]
+    assert not (target / ".memento").exists()
+
+    original.unlink()
+    if entry_type == "directory":
+        conflict.rmdir()
+
+    assert init_workspace(target) == target.resolve()
+
+
+def test_init_workspace_rejects_broken_marker_symlink(tmp_path: Path) -> None:
+    """Treat an existing marker entry as a conflict even if its target is absent."""
+    marker = tmp_path / ".memento"
+    marker.symlink_to(tmp_path / "missing-marker")
+
+    with pytest.raises(FileExistsError):
+        init_workspace(tmp_path)
+
+    assert list(tmp_path.iterdir()) == [marker]

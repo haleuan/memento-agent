@@ -3,7 +3,39 @@
 import pytest
 from pydantic import ValidationError
 
-from mementoagent.schema import AchievementItem
+from mementoagent.schema import AchievementItem, AchievementReference
+
+
+@pytest.mark.parametrize(
+    "reference_type", ["doi", "github", "pdf", "website", "certificate_id", "arxiv"]
+)
+def test_achievement_reference_accepts_links_and_identifiers(
+    reference_type: str,
+) -> None:
+    """Accept supported reference types without requiring an HTTP URL."""
+    result = AchievementReference.model_validate(
+        {"type": reference_type, "url": "document-identifier"}
+    )
+
+    assert result.url == "document-identifier"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {},
+        {"type": "doi"},
+        {"url": "identifier"},
+        {"type": "unknown", "url": "identifier"},
+        {"type": "doi", "url": ""},
+        {"type": "doi", "url": 123},
+        {"type": "doi", "url": "identifier", "label": "extra"},
+    ],
+)
+def test_achievement_reference_rejects_invalid_data(data: dict[str, object]) -> None:
+    """Reject incomplete, untyped, or extra reference metadata."""
+    with pytest.raises(ValidationError):
+        AchievementReference.model_validate(data)
 
 
 def test_achievement_item_accepts_required_fields() -> None:
