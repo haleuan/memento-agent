@@ -1,25 +1,32 @@
-"""Tests for the OpenAI Agents SDK harness boundary."""
+"""Tests for the project-owned OpenAI Responses runtime."""
 
+import json
+from dataclasses import dataclass
 from types import SimpleNamespace
-from unittest.mock import Mock
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
 
-from agents import ModelProvider
-
-from mementoagent.agents import AgentHarness, AgentHarnessError, BaseAgent
-from mementoagent.agents.harness import Runner
+from mementoagent.agents import BaseAgent
+from mementoagent.agents.runtime import AgentRuntime, AgentRuntimeError
+from mementoagent.agents.tools import ToolSpec
 
 
 class Output(BaseModel):
-    """Structured output used by the harness tests."""
+    """Structured output used by runtime tests."""
 
     value: str
 
 
+class AddArguments(BaseModel):
+    """Arguments for the test function tool."""
+
+    value: int
+
+
 class Task(BaseAgent[str, Output]):
-    """Minimal structured task for harness tests."""
+    """Minimal structured task."""
 
     name = "task"
     description = "A test task"
@@ -31,95 +38,326 @@ class Task(BaseAgent[str, Output]):
         return value
 
 
-class RootTask(Task):
-    """Task with one specialist for tool registration tests."""
+class ToolTask(Task):
+    """Task exposing one explicit function tool."""
 
-    name = "root"
+    name = "tool_task"
 
-    def subagents(self) -> tuple[Task, ...]:
-        """Return one specialist task."""
-        return (Task(),)
+    def tools(self) -> tuple[ToolSpec, ...]:
+        """Return the test tool."""
+        return (
+            ToolSpec(
+                name="add_value",
+                description="Add one value.",
+                parameters=AddArguments,
+                handler=lambda arguments, _context: arguments.value + 1,
+            ),
+        )
 
 
-def test_harness_returns_structured_output_and_runtime_settings(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Pass task input to the SDK and return only its typed output."""
-    run_sync = Mock(return_value=SimpleNamespace(final_output={"value": "ok"}))
-    monkeypatch.setattr(Runner, "run_sync", run_sync)
+class Specialist(Task):
+    """Specialist task used to verify subagent composition."""
 
-    result = AgentHarness("test-model").run(Task(), "document text")
+    name = "specialist"
+    description = "Run the specialist task."
+
+
+class Manager(Task):
+    """Manager task exposing a specialist as an internal tool."""
+
+    name = "manager"
+
+    def subagents(self) -> tuple[BaseAgent[Any, Any], ...]:
+        """Return the specialist task."""
+        return (Specialist(),)
+
+
+@dataclass
+class FakeResponse:
+    """Small Responses API response substitute."""
+
+    output: list[Any]
+    output_text: str = ""
+
+
+class FakeResponses:
+    """Record requests and return configured responses in order."""
+
+    def __init__(self, responses: list[FakeResponse]) -> None:
+        """Initialize configured responses."""
+        self.responses = responses
+        self.calls: list[dict[str, Any]] = []
+
+    def create(self, **kwargs: Any) -> FakeResponse:
+        """Record one request and return the next fake response."""
+        self.calls.append(kwargs)
+        if not self.responses:
+            raise AssertionError("unexpected model request")
+        return self.responses.pop(0)
+
+
+class FakeClient:
+    """Fake OpenAI client exposing the Responses resource."""
+
+    def __init__(self, responses: list[FakeResponse]) -> None:
+        """Initialize the fake responses resource."""
+        self.responses = FakeResponses(responses)
+
+
+def final(value: str) -> FakeResponse:
+    """Build a final structured response."""
+    return FakeResponse(output=[], output_text=json.dumps({"value": value}))
+
+
+def tool_call(
+    *,
+    name: str = "add_value",
+    arguments: str = '{"value": 2}',
+    call_id: str = "call-1",
+) -> FakeResponse:
+    """Build a response containing one function call."""
+    return FakeResponse(
+        output=[
+            SimpleNamespace(
+                type="function_call",
+                name=name,
+                arguments=arguments,
+                call_id=call_id,
+            )
+        ]
+    )
+
+
+def test_runtime_returns_structured_output_and_request_contract() -> None:
+    """Pass task fields to Responses and return only the typed output."""
+    client = FakeClient([final("ok")])
+
+    result = AgentRuntime("test-model", client=client).run(Task(), "document text")
 
     assert result == Output(value="ok")
-    assert run_sync.call_args.args[1] == "document text"
-    assert run_sync.call_args.kwargs["max_turns"] == 1
-    assert run_sync.call_args.kwargs["run_config"].tracing_disabled is True
+    request = client.responses.calls[0]
+    assert request["model"] == "test-model"
+    assert request["instructions"] == Task.instructions
+    assert request["input"] == "document text"
+    assert "tools" not in request
+    assert request["text"]["format"]["type"] == "json_schema"
+    assert request["text"]["format"]["name"] == "Output"
+    assert request["text"]["format"]["strict"] is True
 
 
-def test_harness_passes_context(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pass opaque runtime context to the SDK without changing task data."""
-    run_sync = Mock(return_value=SimpleNamespace(final_output=Output(value="ok")))
-    monkeypatch.setattr(Runner, "run_sync", run_sync)
+def test_runtime_uses_agent_model_override() -> None:
+    """Use a task model override when it is declared."""
+    client = FakeClient([final("ok")])
+
+    class ModelTask(Task):
+        model = "task-model"
+
+    AgentRuntime("default-model", client=client).run(ModelTask(), "input")
+
+    assert client.responses.calls[0]["model"] == "task-model"
+
+
+def test_runtime_default_is_one_model_request() -> None:
+    """Do not continue a tool loop when the default limit is one."""
+    client = FakeClient([tool_call()])
+
+    with pytest.raises(AgentRuntimeError, match="final output"):
+        AgentRuntime("test-model", client=client).run(ToolTask(), "input")
+
+    assert len(client.responses.calls) == 1
+
+
+def test_runtime_executes_bounded_tool_loop() -> None:
+    """Return tool output to the model and parse the next final response."""
+    client = FakeClient([tool_call(), final("three")])
+
+    result = AgentRuntime("test-model", client=client, max_turns=2).run(
+        ToolTask(), "input", context={"request_id": "r1"}
+    )
+
+    assert result == Output(value="three")
+    assert len(client.responses.calls) == 2
+    second_input = client.responses.calls[1]["input"]
+    assert second_input[-1]["type"] == "function_call_output"
+    assert second_input[-1]["call_id"] == "call-1"
+    assert second_input[-1]["output"] == "3"
+
+
+def test_runtime_composes_subagent_as_internal_tool() -> None:
+    """Run a declared specialist without exposing a global registry."""
+    client = FakeClient(
+        [
+            tool_call(name="specialist", arguments='{"input":"child"}'),
+            final("child result"),
+            final("manager result"),
+        ]
+    )
+
+    result = AgentRuntime("test-model", client=client, max_turns=2).run(
+        Manager(), "parent"
+    )
+
+    assert result == Output(value="manager result")
+    assert client.responses.calls[0]["tools"][0]["name"] == "specialist"
+    assert client.responses.calls[1]["input"] == "child"
+
+
+def test_runtime_passes_context_to_tool() -> None:
+    """Pass opaque context to a tool handler."""
+    seen: list[object | None] = []
+
+    def handler(arguments: AddArguments, context: object | None) -> int:
+        seen.append(context)
+        return arguments.value
+
+    task = ToolTask()
+    task.tools = lambda: (
+        ToolSpec(
+            name="add_value",
+            description="Add one value.",
+            parameters=AddArguments,
+            handler=handler,
+        ),
+    )  # type: ignore[method-assign]
+    client = FakeClient([tool_call(), final("two")])
     context = object()
 
-    AgentHarness("test-model").run(Task(), "input", context=context)
+    AgentRuntime("test-model", client=client, max_turns=2).run(
+        task, "input", context=context
+    )
 
-    assert run_sync.call_args.kwargs["context"] is context
+    assert seen == [context]
 
 
-def test_harness_accepts_an_injected_model_provider(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("response", "message"),
+    [
+        (FakeResponse(output=[], output_text=""), "structured output"),
+        (FakeResponse(output=[], output_text="not json"), "structured output"),
+    ],
+)
+def test_runtime_rejects_missing_or_invalid_output(
+    response: FakeResponse, message: str
 ) -> None:
-    """Use an injected SDK provider without constructing a network client."""
-    run_sync = Mock(return_value=SimpleNamespace(final_output=Output(value="ok")))
-    monkeypatch.setattr(Runner, "run_sync", run_sync)
-    provider = Mock(spec=ModelProvider)
-
-    AgentHarness("test-model", model_provider=provider).run(Task(), "input")
-
-    assert run_sync.call_args.kwargs["run_config"].model_provider is provider
+    """Reject responses without valid structured output."""
+    with pytest.raises(AgentRuntimeError, match=message):
+        AgentRuntime("test-model", client=FakeClient([response])).run(Task(), "input")
 
 
-def test_harness_wraps_runtime_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Hide SDK errors behind the project harness error."""
-    run_sync = Mock(side_effect=RuntimeError("secret failure"))
-    monkeypatch.setattr(Runner, "run_sync", run_sync)
+def test_runtime_wraps_model_errors_without_leaking_details() -> None:
+    """Hide provider exception text and credentials behind one error."""
 
-    with pytest.raises(AgentHarnessError, match="agent run failed") as error:
-        AgentHarness("test-model", api_key="secret-key").run(Task(), "input")
+    class FailingResponses(FakeResponses):
+        def create(self, **kwargs: Any) -> FakeResponse:
+            raise RuntimeError("secret-key and private document")
+
+    client = FakeClient([])
+    client.responses = FailingResponses([])
+
+    with pytest.raises(AgentRuntimeError, match="model request failed") as error:
+        AgentRuntime("test-model", client=client, api_key="secret-key").run(
+            Task(), "private document"
+        )
 
     assert "secret-key" not in str(error.value)
-    assert "secret failure" not in str(error.value)
+    assert "private document" not in str(error.value)
 
 
-def test_harness_rejects_invalid_structured_output(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("name", "arguments", "message"),
+    [
+        ("missing", '{"value": 2}', "unknown tool"),
+        ("add_value", "{", "tool execution failed"),
+        ("add_value", '{"value":"wrong"}', "tool execution failed"),
+    ],
+)
+def test_runtime_rejects_invalid_tool_calls(
+    name: str, arguments: str, message: str
 ) -> None:
-    """Reject output that cannot satisfy the task schema."""
-    run_sync = Mock(return_value=SimpleNamespace(final_output={"wrong": 1}))
-    monkeypatch.setattr(Runner, "run_sync", run_sync)
+    """Fail closed for unknown tools and invalid tool arguments."""
+    client = FakeClient([tool_call(name=name, arguments=arguments)])
 
-    with pytest.raises(
-        AgentHarnessError,
-        match="invalid structured output",
-    ):
-        AgentHarness("test-model").run(Task(), "input")
+    with pytest.raises(AgentRuntimeError, match=message):
+        AgentRuntime("test-model", client=client, max_turns=2).run(ToolTask(), "input")
 
 
-def test_harness_does_not_add_tools_without_subagents() -> None:
-    """Build a plain SDK agent when a task has no specialists."""
-    harness = AgentHarness("test-model")
+def test_runtime_rejects_tool_handler_errors() -> None:
+    """Convert handler failures to the runtime error boundary."""
 
-    sdk_agent = harness._build_sdk_agent(Task())
+    class FailingTask(ToolTask):
+        def tools(self) -> tuple[ToolSpec, ...]:
+            return (
+                ToolSpec(
+                    name="add_value",
+                    description="Fail.",
+                    parameters=AddArguments,
+                    handler=lambda _arguments, _context: (_ for _ in ()).throw(
+                        RuntimeError("private failure")
+                    ),
+                ),
+            )
 
-    assert sdk_agent.tools == []
+    with pytest.raises(AgentRuntimeError, match="tool execution failed") as error:
+        AgentRuntime("test-model", client=FakeClient([tool_call()]), max_turns=2).run(
+            FailingTask(), "input"
+        )
+
+    assert "private failure" not in str(error.value)
 
 
-def test_harness_exposes_subagents_as_tools() -> None:
-    """Convert declared specialists into manager-owned SDK tools."""
-    harness = AgentHarness("test-model")
+def test_runtime_rejects_non_serializable_tool_result() -> None:
+    """Reject a tool result that cannot be encoded as JSON."""
 
-    sdk_agent = harness._build_sdk_agent(RootTask())
+    class UnserializableTask(ToolTask):
+        def tools(self) -> tuple[ToolSpec, ...]:
+            return (
+                ToolSpec(
+                    name="add_value",
+                    description="Return an unserializable value.",
+                    parameters=AddArguments,
+                    handler=lambda _arguments, _context: object(),
+                ),
+            )
 
-    assert len(sdk_agent.tools) == 1
-    assert sdk_agent.tools[0].name == "task"
+    with pytest.raises(AgentRuntimeError, match="tool execution failed"):
+        AgentRuntime("test-model", client=FakeClient([tool_call()]), max_turns=2).run(
+            UnserializableTask(), "input"
+        )
+
+
+def test_runtime_enforces_tool_call_limit() -> None:
+    """Stop before executing more calls than the configured limit."""
+    response = FakeResponse(
+        output=[
+            SimpleNamespace(
+                type="function_call",
+                name="add_value",
+                arguments='{"value": 1}',
+                call_id="one",
+            ),
+            SimpleNamespace(
+                type="function_call",
+                name="add_value",
+                arguments='{"value": 2}',
+                call_id="two",
+            ),
+        ]
+    )
+
+    with pytest.raises(AgentRuntimeError, match="tool call limit"):
+        AgentRuntime(
+            "test-model", client=FakeClient([response]), max_turns=2, max_tool_calls=1
+        ).run(ToolTask(), "input")
+
+
+def test_runtime_accepts_injected_client_and_base_url_without_request_leak() -> None:
+    """Use an injected client and keep configuration out of request payloads."""
+    client = FakeClient([final("ok")])
+
+    AgentRuntime(
+        "test-model", client=client, api_key="secret-key", base_url="https://private"
+    ).run(Task(), "input")
+
+    request = client.responses.calls[0]
+    assert "api_key" not in request
+    assert "base_url" not in request

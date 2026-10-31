@@ -12,7 +12,7 @@ from mementoagent.agents import (
     AchievementExtractor,
     DescriptionSuggestion,
 )
-from mementoagent.agents.harness import AgentHarnessError
+from mementoagent.agents.runtime import AgentRuntimeError
 from mementoagent.schema import (
     AchievementItem,
     ParseSnapshot,
@@ -38,11 +38,11 @@ def make_snapshot(content: str = "证书标题\n重庆师范大学\n") -> ParseS
     )
 
 
-class FakeHarness:
+class FakeRuntime:
     """Return a configured structured extraction from a task input."""
 
     def __init__(self, output: Any = None, error: Exception | None = None) -> None:
-        """Create a fake harness returning `output` or raising `error`."""
+        """Create a fake runtime returning `output` or raising `error`."""
         self.output = output
         self.error = error
         self.agent = None
@@ -77,15 +77,15 @@ def make_extraction(
 def test_extractor_returns_draft_and_injects_source() -> None:
     """Copy structured data and source identity into an in-memory draft."""
     extraction = make_extraction(level_raw="一等奖", certificate_number="202412055458")
-    harness = FakeHarness(extraction)
+    runtime = FakeRuntime(extraction)
 
-    extractor = AchievementExtractor(harness)  # type: ignore[arg-type]
+    extractor = AchievementExtractor(runtime)  # type: ignore[arg-type]
     result = extractor.extract(make_snapshot("标题\n机构\n等级\n编号\n"))
 
     assert result == AchievementDraft(data=extraction.data, source=SOURCE)
     assert result.data.description is None
-    assert harness.agent is extractor
-    assert harness.value.content == "标题\n机构\n等级\n编号\n"
+    assert runtime.agent is extractor
+    assert runtime.value.content == "标题\n机构\n等级\n编号\n"
     assert "Do not infer" in extractor.instructions
 
 
@@ -99,9 +99,9 @@ def test_extractor_keeps_description_suggestion_separate() -> None:
         description_suggestion=suggestion,
         level_raw="一等奖",
     )
-    harness = FakeHarness(extraction)
+    runtime = FakeRuntime(extraction)
 
-    extractor = AchievementExtractor(harness)  # type: ignore[arg-type]
+    extractor = AchievementExtractor(runtime)  # type: ignore[arg-type]
     result = extractor.extract(make_snapshot())
 
     assert result.description_suggestion == suggestion
@@ -112,9 +112,9 @@ def test_extractor_keeps_description_suggestion_separate() -> None:
 
 def test_extractor_preserves_optional_unknown_fields_as_none() -> None:
     """Keep fields absent from the structured response unset."""
-    harness = FakeHarness(make_extraction())
+    runtime = FakeRuntime(make_extraction())
 
-    result = AchievementExtractor(harness).extract(make_snapshot())  # type: ignore[arg-type]
+    result = AchievementExtractor(runtime).extract(make_snapshot())  # type: ignore[arg-type]
 
     assert result.data.level_raw is None
     assert result.data.certificate_number is None
@@ -123,16 +123,16 @@ def test_extractor_preserves_optional_unknown_fields_as_none() -> None:
 
 
 def test_extractor_rejects_missing_structured_output() -> None:
-    """Fail clearly when the provider produces no structured result."""
-    harness = FakeHarness(
-        error=AgentHarnessError("provider returned no structured achievement")
+    """Fail clearly when the runtime produces no structured result."""
+    runtime = FakeRuntime(
+        error=AgentRuntimeError("provider returned no structured achievement")
     )
 
     with pytest.raises(
         AchievementExtractionError,
         match="no structured achievement",
     ):
-        AchievementExtractor(harness).extract(make_snapshot())  # type: ignore[arg-type]
+        AchievementExtractor(runtime).extract(make_snapshot())  # type: ignore[arg-type]
 
 
 def test_extractor_rejects_user_description() -> None:
@@ -149,22 +149,22 @@ def test_extractor_rejects_user_description() -> None:
 
 
 def test_extractor_rejects_invalid_structured_output() -> None:
-    """Reject provider data that does not satisfy the achievement schema."""
-    harness = FakeHarness(
-        error=AgentHarnessError("provider returned an invalid achievement")
+    """Reject runtime data that does not satisfy the achievement schema."""
+    runtime = FakeRuntime(
+        error=AgentRuntimeError("provider returned an invalid achievement")
     )
 
     with pytest.raises(
         AchievementExtractionError,
         match="invalid achievement",
     ):
-        AchievementExtractor(harness).extract(make_snapshot())  # type: ignore[arg-type]
+        AchievementExtractor(runtime).extract(make_snapshot())  # type: ignore[arg-type]
 
 
 def test_extractor_does_not_write_files(tmp_path) -> None:
     """Extraction is in-memory and does not create workspace artifacts."""
-    harness = FakeHarness(make_extraction())
+    runtime = FakeRuntime(make_extraction())
 
-    AchievementExtractor(harness).extract(make_snapshot())  # type: ignore[arg-type]
+    AchievementExtractor(runtime).extract(make_snapshot())  # type: ignore[arg-type]
 
     assert list(tmp_path.iterdir()) == []
