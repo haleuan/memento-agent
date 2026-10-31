@@ -7,6 +7,13 @@ from .extraction import (
     AchievementExtractor,
     DescriptionSuggestion,
 )
+from .review import (
+    AchievementReviewDecision,
+    ReviewedAchievementDraft,
+    review_achievement_draft,
+)
+from .base import BaseAgent
+from .harness import AgentHarness, AgentHarnessError
 
 __all__ = [
     "AchievementDraft",
@@ -14,4 +21,10 @@ __all__ = [
     "AchievementExtractionError",
     "AchievementExtractor",
     "DescriptionSuggestion",
+    "AchievementReviewDecision",
+    "ReviewedAchievementDraft",
+    "review_achievement_draft",
+    "AgentHarness",
+    "AgentHarnessError",
+    "BaseAgent",
 ]

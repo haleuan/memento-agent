@@ -21,7 +21,17 @@ Snapshot metadata and records are structured TOML. `content.md` preserves the pa
 
 ## Achievement Extraction
 
-`AchievementExtractor` reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Event dates are not included yet because date interpretation belongs in deterministic code. The extractor does not create or save a record; approval and record materialization are separate steps.
+`AchievementExtractor` runs as the first task through the local Agent Harness. It reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Event dates are not included yet because date interpretation belongs in deterministic code. The extractor does not create or save a record; approval and record materialization are separate steps.
+
+## Agent Harness
+
+The project uses the OpenAI Agents SDK as its runtime, behind a small local Harness. A task Agent declares its instructions, structured output type, input conversion, and optional subagents. The Harness owns one synchronous model run, output validation, error boundaries, and runtime configuration, then returns only the task's typed output. It does not expose the SDK run result to domain code.
+
+Subagents are reserved for future bounded specialist tasks. The planned manager pattern keeps the user-facing Agent in control and exposes specialists through `agents-as-tools`; handoffs, ReAct loops, sessions, and concrete subagent implementations are not part of the current implementation.
+
+## Achievement Draft Review
+
+The user reviews a draft through the Agent conversation. The Agent turns a natural-language reply such as confirmation, a field correction, a description edit, or rejection into a structured `AchievementReviewDecision`. The review module validates that decision and returns an in-memory reviewed draft while preserving the original extracted draft. User corrections remain separate from source-supported facts, and the review module does not create or save a record. Natural-language interpretation, CLI presentation, and draft-to-record conversion remain separate work.
 
 ## MinerU Parser Configuration
 

@@ -65,8 +65,17 @@ comment should be brief and reference the relevant debt ID.
 ## TD-006: Review and Materialize Achievement Drafts
 
 - **Status**: `accepted`
-- **Location**: `src/mementoagent/agents/extraction.py`
-- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional, unconfirmed description suggestion. It does not include occurrence dates, apply suggestions, create a `RecordEnvelope`, generate record metadata, write evidence, or save a TOML record. Extracted data therefore needs a separate date-processing and approval path before entering the workspace.
-- **Reason deferred**: The current scope isolates structured achievement extraction and suggestion generation. The project requires date interpretation to be deterministic, and no date parser exists yet; user acceptance, record creation, and persistence also need their own explicit contract.
+- **Location**: `src/mementoagent/agents/extraction.py` and `src/mementoagent/agents/review.py`
+- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional, unconfirmed description suggestion. A structured review API now accepts the Agent's conversational decision and preserves original and reviewed values, but it does not include occurrence dates, create a `RecordEnvelope`, generate record metadata, write evidence, or save a TOML record. Reviewed data therefore still needs a separate materialization path before entering the workspace.
+- **Reason deferred**: Conversational review and deterministic application of a structured decision are now isolated from persistence. Date interpretation must remain deterministic, and draft-to-record conversion, provenance for user corrections, evidence generation, and saving need their own explicit contract.
 - **Review trigger**: Before a user-facing workflow needs to approve, edit, date, or persist an extracted achievement.
-- **Completion criteria**: Raw date text is passed through a deterministic parser into `PartialDate`; an explicit user review step can accept, edit, or reject suggestions; a deterministic draft-to-record conversion creates envelope metadata and source-level evidence and persists only the approved record, with tests.
+- **Completion criteria**: Raw date text is passed through a deterministic parser into `PartialDate`; a deterministic draft-to-record conversion distinguishes source-supported values from user corrections, creates envelope metadata and source-level evidence, and persists only an approved record, with tests.
+
+## TD-007: Expand the Agent Runtime Beyond One Structured Turn
+
+- **Status**: `accepted`
+- **Location**: `src/mementoagent/agents/base.py` and `src/mementoagent/agents/harness.py`
+- **Current state and impact**: The local Harness runs one synchronous OpenAI Agents SDK turn and returns only the task's validated structured output. It does not persist sessions, expose usage or traces, resume interrupted runs, perform handoffs, or run concrete subagents.
+- **Reason deferred**: The current extraction task is a single bounded operation. Adding multi-turn state, handoffs, ReAct loops, or durable execution before a concrete workflow requires them would enlarge the runtime contract without a tested consumer.
+- **Review trigger**: When a second task needs a real subagent, multi-turn conversation state, human interruption/resume, handoff ownership, or production run observability.
+- **Completion criteria**: The required runtime capability is selected explicitly, its state and failure contracts are documented, and the feature has an end-to-end task with offline tests for execution, resumption, subagent boundaries, and sensitive-data handling.

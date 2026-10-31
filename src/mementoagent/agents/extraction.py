@@ -1,16 +1,11 @@
 """Extract structured achievement data from a parse snapshot."""
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    StrictStr,
-    ValidationError,
-    model_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 
-from mementoagent.providers import OpenAIProvider
 from mementoagent.schema import AchievementItem, HashId, ParseSnapshot
+
+from .base import BaseAgent
+from .harness import AgentHarness, AgentHarnessError
 
 
 class AchievementExtractionError(ValueError):
@@ -71,18 +66,32 @@ metrics, or other facts. Return null when no safe suggestion is possible.
 """
 
 
-class AchievementExtractor:
-    """Extract an in-memory achievement draft with a structured provider."""
+class AchievementExtractor(BaseAgent[ParseSnapshot, AchievementExtraction]):
+    """Extract an in-memory achievement draft with the shared harness."""
 
-    def __init__(self, provider: OpenAIProvider, model: str) -> None:
+    name = "achievement_extractor"
+    description = "Extract one document-supported achievement."
+    instructions = _EXTRACTION_INSTRUCTIONS
+    output_type = AchievementExtraction
+
+    def __init__(self, harness: AgentHarness) -> None:
         """Initialize the extractor.
 
         Args:
-            provider: Provider that supports structured Pydantic responses.
-            model: Model identifier passed to the provider.
+            harness: Shared Agent runtime used to execute this task.
         """
-        self._provider = provider
-        self._model = model
+        self._harness = harness
+
+    def build_input(self, value: ParseSnapshot) -> str:
+        """Return the complete parsed document for the extraction task.
+
+        Args:
+            value: Parsed source content to extract from.
+
+        Returns:
+            The original parser output without additional formatting.
+        """
+        return value.content
 
     def extract(self, snapshot: ParseSnapshot) -> AchievementDraft:
         """Extract an achievement draft from a parse snapshot.
@@ -94,26 +103,13 @@ class AchievementExtractor:
             An unpersisted draft whose source is copied from the snapshot.
 
         Raises:
-            AchievementExtractionError: If the provider returns no usable
+            AchievementExtractionError: If the harness cannot produce a usable
                 structured achievement.
         """
-        response = self._provider.parse(
-            instructions=_EXTRACTION_INSTRUCTIONS,
-            input=snapshot.content,
-            model=self._model,
-            text_format=AchievementExtraction,
-        )
-        if response.output_parsed is None:
-            raise AchievementExtractionError(
-                "provider returned no structured achievement"
-            )
-
         try:
-            extraction = AchievementExtraction.model_validate(response.output_parsed)
-        except ValidationError as error:
-            raise AchievementExtractionError(
-                "provider returned an invalid achievement"
-            ) from error
+            extraction = self._harness.run(self, snapshot)
+        except AgentHarnessError as error:
+            raise AchievementExtractionError(str(error)) from error
 
         return AchievementDraft(
             data=extraction.data,
