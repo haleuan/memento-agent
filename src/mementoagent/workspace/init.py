@@ -16,19 +16,26 @@ def init_workspace(path: Path) -> Path:
         Absolute path to the workspace root.
 
     Raises:
-        FileExistsError: If a `.memento` directory already exists at this location.
+        FileExistsError: If `.memento` or a standard workspace path already exists.
     """
     resolved_path = path.expanduser().resolve()
     memento_path = resolved_path / ".memento"
-    if memento_path.exists():
+    if memento_path.exists() or memento_path.is_symlink():
         raise FileExistsError(f"Workspace already exists at {resolved_path}")
+
+    directory_paths = [
+        resolved_path / name for name in ("inbox", "sources", "records", "outputs")
+    ]
+    for directory in directory_paths:
+        if directory.exists() or directory.is_symlink():
+            raise FileExistsError(f"Workspace path already exists: {directory}")
+
+    for directory in directory_paths:
+        directory.mkdir(parents=True, exist_ok=False)
 
     memento_path.mkdir(parents=True, exist_ok=False)
     (memento_path / "parses").mkdir(parents=True, exist_ok=False)
     (memento_path / "cache").mkdir(parents=True, exist_ok=False)
     (memento_path / "workspace.toml").touch()
-
-    for directory_name in ("inbox", "sources", "records", "outputs"):
-        (resolved_path / directory_name).mkdir(parents=True, exist_ok=False)
 
     return resolved_path

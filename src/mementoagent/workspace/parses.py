@@ -1,13 +1,12 @@
 """Persist successful parse snapshots in a workspace."""
 
+import tomllib
 from datetime import datetime
 from pathlib import Path
-import tomllib
-from typing import Any
 from uuid import uuid4
 
-from pydantic import ValidationError
 import tomli_w
+from pydantic import ValidationError
 
 from mementoagent.schema import ParseSnapshot, ParseSnapshotMetadata
 
@@ -88,14 +87,11 @@ def load_parse_snapshot(snapshot_dir: Path) -> ParseSnapshot:
     content_path = snapshot_dir / "content.md"
     with metadata_path.open("rb") as metadata_file:
         try:
-            data: Any = tomllib.load(metadata_file)
+            data = tomllib.load(metadata_file)
         except tomllib.TOMLDecodeError as error:
             raise ValueError("invalid parse snapshot metadata TOML") from error
     with content_path.open(encoding="utf-8", newline="") as content_file:
         content = content_file.read()
-
-    if not isinstance(data, dict):
-        raise ValueError("parse snapshot metadata must be a mapping")
 
     try:
         metadata = ParseSnapshotMetadata.model_validate(data)

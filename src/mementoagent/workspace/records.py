@@ -1,14 +1,13 @@
 """Record file I/O using TOML."""
 
-from pathlib import Path
 import tomllib
+from pathlib import Path
 from typing import Any, TypeVar, cast
 
-from pydantic import BaseModel, ValidationError
 import tomli_w
+from pydantic import BaseModel, ValidationError
 
 from mementoagent.schema import RecordEnvelope
-
 
 RecordData = TypeVar("RecordData", bound=BaseModel)
 

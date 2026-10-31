@@ -1,8 +1,8 @@
 """Workspace discovery and evidence paths."""
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
-import re
 
 
 class WorkspaceNotFoundError(FileNotFoundError):
