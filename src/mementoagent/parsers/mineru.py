@@ -1,10 +1,11 @@
 """Synchronous adapter for the MinerU V4 parsing API."""
 
 import hashlib
-from pathlib import Path
-import tempfile
 import time
-from typing import Any
+from io import BytesIO
+from pathlib import Path
+from types import TracebackType
+from typing import Any, Self
 from urllib.parse import quote
 from zipfile import BadZipFile, ZipFile
 
@@ -12,7 +13,6 @@ import httpx
 
 from mementoagent.config import resolve_mineru_api_base_url
 from mementoagent.http import HttpTransport, HttpxTransport
-
 
 _REQUEST_TIMEOUT_SECONDS = 30.0
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
@@ -45,7 +45,8 @@ class MineruParser:
             model_version: MinerU V4 model version.
             is_ocr: Whether OCR is enabled for the source file.
             poll_interval: Delay between result polling requests.
-            timeout: Maximum time allowed for one parse operation.
+            timeout: Parse budget checked between stages. It limits request
+                waits but cannot interrupt an in-progress synchronous request.
             api_base_url: Optional MinerU V4 API base URL.
             transport: Optional HTTP transport, primarily for testing.
         """
@@ -55,7 +56,30 @@ class MineruParser:
         self._poll_interval = poll_interval
         self._timeout = timeout
         self._api_base_url = resolve_mineru_api_base_url(api_base_url)
-        self._transport = transport or HttpxTransport()
+        if transport is None:
+            transport = HttpxTransport()
+            self._owned_transport: HttpxTransport | None = transport
+        else:
+            self._owned_transport = None
+        self._transport = transport
+
+    def close(self) -> None:
+        """Close the default transport without closing an injected transport."""
+        if self._owned_transport is not None:
+            self._owned_transport.close()
+
+    def __enter__(self) -> Self:
+        """Return this parser for scoped connection reuse."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Release owned resources when the context exits."""
+        self.close()
 
     @property
     def version(self) -> str:
@@ -75,13 +99,6 @@ class MineruParser:
             MineruParserError: If the API request, task, timeout, or result is invalid.
         """
         deadline = time.monotonic() + self._timeout
-        return self._parse_with_transport(source_path, deadline)
-
-    def _parse_with_transport(
-        self,
-        source_path: Path,
-        deadline: float,
-    ) -> str:
         data_id = self._stable_data_id(source_path)
         response_data = self._api_request(
             "POST",
@@ -107,7 +124,10 @@ class MineruParser:
 
         self._upload_file(source_path, file_urls[0], deadline)
         zip_url = self._wait_for_result(batch_id, data_id, deadline)
-        return self._download_markdown(zip_url, deadline)
+        markdown = self._download_markdown(zip_url, deadline)
+        if time.monotonic() >= deadline:
+            raise MineruParserError("MinerU parsing timed out")
+        return markdown
 
     def _api_request(
         self,
@@ -261,11 +281,8 @@ class MineruParser:
                 raise MineruParserError(
                     f"MinerU result download failed with HTTP {response.status_code}"
                 )
-            with tempfile.TemporaryFile() as result_file:
-                result_file.write(response.content)
-                result_file.seek(0)
-                with ZipFile(result_file) as result_zip:
-                    content = result_zip.read("full.md")
+            with ZipFile(BytesIO(response.content)) as result_zip:
+                content = result_zip.read("full.md")
         except httpx.HTTPError:
             raise MineruParserError("MinerU result download failed") from None
         except (BadZipFile, KeyError):
