@@ -2,15 +2,15 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
-
-ToolHandler = Callable[[BaseModel, object | None], object]
+ParamsT = TypeVar("ParamsT", bound=BaseModel)
 
 
 @dataclass(frozen=True)
-class ToolSpec:
+class ToolSpec(Generic[ParamsT]):
     """Describe one function tool exposed to a task Agent.
 
     Args:
@@ -23,10 +23,5 @@ class ToolSpec:
 
     name: str
     description: str
-    parameters: type[BaseModel]
-    handler: ToolHandler
-
-    @property
-    def parameter_model(self) -> type[BaseModel]:
-        """Return the parameter model under an explicit descriptive name."""
-        return self.parameters
+    parameters: type[ParamsT]
+    handler: Callable[[ParamsT, object | None], object]
