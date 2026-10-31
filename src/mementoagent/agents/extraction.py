@@ -5,11 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 from mementoagent.schema import AchievementItem, HashId, ParseSnapshot
 
 from .base import BaseAgent
-from .harness import AgentHarness, AgentHarnessError
+from .runtime import AgentRuntime, AgentRuntimeError
 
 
 class AchievementExtractionError(ValueError):
-    """Raised when a provider response cannot produce an achievement draft."""
+    """Raised when a runtime response cannot produce an achievement draft."""
 
 
 class DescriptionSuggestion(BaseModel):
@@ -67,20 +67,20 @@ metrics, or other facts. Return null when no safe suggestion is possible.
 
 
 class AchievementExtractor(BaseAgent[ParseSnapshot, AchievementExtraction]):
-    """Extract an in-memory achievement draft with the shared harness."""
+    """Extract an in-memory achievement draft with the shared runtime."""
 
     name = "achievement_extractor"
     description = "Extract one document-supported achievement."
     instructions = _EXTRACTION_INSTRUCTIONS
     output_type = AchievementExtraction
 
-    def __init__(self, harness: AgentHarness) -> None:
+    def __init__(self, runtime: AgentRuntime) -> None:
         """Initialize the extractor.
 
         Args:
-            harness: Shared Agent runtime used to execute this task.
+            runtime: Shared Agent runtime used to execute this task.
         """
-        self._harness = harness
+        self._runtime = runtime
 
     def build_input(self, value: ParseSnapshot) -> str:
         """Return the complete parsed document for the extraction task.
@@ -103,12 +103,12 @@ class AchievementExtractor(BaseAgent[ParseSnapshot, AchievementExtraction]):
             An unpersisted draft whose source is copied from the snapshot.
 
         Raises:
-            AchievementExtractionError: If the harness cannot produce a usable
+            AchievementExtractionError: If the runtime cannot produce a usable
                 structured achievement.
         """
         try:
-            extraction = self._harness.run(self, snapshot)
-        except AgentHarnessError as error:
+            extraction = self._runtime.run(self, snapshot)
+        except AgentRuntimeError as error:
             raise AchievementExtractionError(str(error)) from error
 
         return AchievementDraft(
