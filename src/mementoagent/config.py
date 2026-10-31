@@ -2,7 +2,6 @@
 
 import os
 
-
 DEFAULT_MINERU_API_BASE_URL = "https://mineru.net/api/v4"
 MINERU_API_BASE_URL_ENV = "MEMENTO_MINERU_API_BASE_URL"
 

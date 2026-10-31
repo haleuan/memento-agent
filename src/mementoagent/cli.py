@@ -1,11 +1,11 @@
 """Entry point for the Memento command-line interface."""
 
 import argparse
-from pathlib import Path
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
-from mementoagent.schema import AchievementItem
+from mementoagent.schema import ACHIEVEMENT_SCHEMA_VERSION, AchievementItem
 from mementoagent.validation import validate_record
 from mementoagent.workspace import find_workspace, load_record
 
@@ -34,6 +34,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         workspace_root = find_workspace(record_path)
         record = load_record(record_path, AchievementItem)
+        if record.schema_version != ACHIEVEMENT_SCHEMA_VERSION:
+            raise ValueError(f"unsupported achievement schema: {record.schema_version}")
     except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
