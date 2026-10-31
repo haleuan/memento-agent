@@ -21,13 +21,13 @@ Snapshot metadata and records are structured TOML. `content.md` preserves the pa
 
 ## Achievement Extraction
 
-`AchievementExtractor` runs as the first task through the local Agent Harness. It reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Event dates are not included yet because date interpretation belongs in deterministic code. The extractor does not create or save a record; approval and record materialization are separate steps.
+`AchievementExtractor` runs as the first task through the project's local Agent Runtime. It reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Event dates are not included yet because date interpretation belongs in deterministic code. The extractor does not create or save a record; approval and record materialization are separate steps.
 
-## Agent Harness
+## Agent Runtime
 
-The project uses the OpenAI Agents SDK as its runtime, behind a small local Harness. A task Agent declares its instructions, structured output type, input conversion, and optional subagents. The Harness owns one synchronous model run, output validation, error boundaries, and runtime configuration, then returns only the task's typed output. It does not expose the SDK run result to domain code.
+The project uses the official OpenAI Python SDK behind a small local Runtime. A task Agent declares its instructions, structured output type, input conversion, and optional tools or subagents. The Runtime owns synchronous Responses API requests, structured output validation, an in-memory run state, bounded function-tool execution, and error boundaries, then returns only the task's typed output. It does not expose SDK response objects, usage, or credentials to domain code.
 
-Subagents are reserved for future bounded specialist tasks. The planned manager pattern keeps the user-facing Agent in control and exposes specialists through `agents-as-tools`; handoffs, ReAct loops, sessions, and concrete subagent implementations are not part of the current implementation.
+Tools use explicit `ToolSpec` declarations. A manager can compose future bounded subagents as internal tools, while the manager retains control of the conversation. Session persistence, handoffs, ReAct orchestration, asynchronous execution, and concrete subagent implementations are not part of the current implementation.
 
 ## Achievement Draft Review
 

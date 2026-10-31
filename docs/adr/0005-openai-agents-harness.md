@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-0006](0006-self-hosted-openai-runtime.md)
 
 ## Context
 
@@ -18,7 +18,7 @@ tools to a manager Agent. Memento needs those capabilities eventually, while
 retaining control over source provenance and the domain models returned to the
 rest of the application.
 
-## Decision
+## Decision (superseded)
 
 Use the OpenAI Agents SDK as the Agent runtime behind a local Memento Harness.
 

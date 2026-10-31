@@ -7,7 +7,7 @@ license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.28.1",
-    "openai-agents>=0.24.0",
+    "openai>=3.42.0",
     "pydantic>=2.14.1",
     "python-dotenv>=1.2.4",
     "tomli-w>=1.2.0",

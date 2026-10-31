@@ -74,8 +74,8 @@ comment should be brief and reference the relevant debt ID.
 ## TD-007: Expand the Agent Runtime Beyond One Structured Turn
 
 - **Status**: `accepted`
-- **Location**: `src/mementoagent/agents/base.py` and `src/mementoagent/agents/harness.py`
-- **Current state and impact**: The local Harness runs one synchronous OpenAI Agents SDK turn and returns only the task's validated structured output. It does not persist sessions, expose usage or traces, resume interrupted runs, perform handoffs, or run concrete subagents.
-- **Reason deferred**: The current extraction task is a single bounded operation. Adding multi-turn state, handoffs, ReAct loops, or durable execution before a concrete workflow requires them would enlarge the runtime contract without a tested consumer.
-- **Review trigger**: When a second task needs a real subagent, multi-turn conversation state, human interruption/resume, handoff ownership, or production run observability.
-- **Completion criteria**: The required runtime capability is selected explicitly, its state and failure contracts are documented, and the feature has an end-to-end task with offline tests for execution, resumption, subagent boundaries, and sensitive-data handling.
+- **Location**: `src/mementoagent/agents/base.py`, `src/mementoagent/agents/runtime.py`, and `src/mementoagent/agents/tools.py`
+- **Current state and impact**: The project-owned Runtime now uses the OpenAI Python SDK for synchronous Responses API calls, structured output validation, in-memory run state, and bounded function-tool execution. It does not persist sessions, resume interrupted runs, compress long contexts, perform handoffs, expose production observability, or run concrete subagents.
+- **Reason deferred**: The current extraction task only needs a bounded synchronous run. Durable state, richer context management, handoffs, and asynchronous execution would enlarge the runtime contract before a concrete workflow requires them.
+- **Review trigger**: When a task needs a real subagent, multi-turn conversation state, human interruption/resume, long-context management, handoff ownership, asynchronous execution, or production run observability.
+- **Completion criteria**: Each required capability has an explicit state and failure contract, and an end-to-end task has offline tests for execution limits, resumption, subagent boundaries, context management, and sensitive-data handling.
