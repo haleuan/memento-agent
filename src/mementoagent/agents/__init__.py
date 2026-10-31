@@ -1,5 +1,6 @@
 """Agent implementations for Memento."""
 
+from .base import BaseAgent
 from .extraction import (
     AchievementDraft,
     AchievementExtraction,
@@ -12,7 +13,6 @@ from .review import (
     ReviewedAchievementDraft,
     review_achievement_draft,
 )
-from .base import BaseAgent
 from .runtime import AgentRuntime, AgentRuntimeError
 from .tools import ToolSpec
 

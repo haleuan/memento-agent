@@ -8,7 +8,6 @@ from pydantic import BaseModel
 
 from .tools import ToolSpec
 
-
 InputT = TypeVar("InputT")
 OutputT = TypeVar("OutputT", bound=BaseModel)
 
@@ -34,10 +33,10 @@ class BaseAgent(ABC, Generic[InputT, OutputT]):
         """
         ...
 
-    def subagents(self) -> Sequence["BaseAgent[Any, Any]"]:
+    def subagents(self) -> Sequence["BaseAgent[str, Any]"]:
         """Return specialist agents exposed as tools to this agent."""
         return ()
 
-    def tools(self) -> Sequence[ToolSpec]:
+    def tools(self) -> Sequence[ToolSpec[Any]]:
         """Return function tools available to this agent."""
         return ()
