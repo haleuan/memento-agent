@@ -6,6 +6,8 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
+from .tools import ToolSpec
+
 
 InputT = TypeVar("InputT")
 OutputT = TypeVar("OutputT", bound=BaseModel)
@@ -34,4 +36,8 @@ class BaseAgent(ABC, Generic[InputT, OutputT]):
 
     def subagents(self) -> Sequence["BaseAgent[Any, Any]"]:
         """Return specialist agents exposed as tools to this agent."""
+        return ()
+
+    def tools(self) -> Sequence[ToolSpec]:
+        """Return function tools available to this agent."""
         return ()
