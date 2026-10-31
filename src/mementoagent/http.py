@@ -1,7 +1,8 @@
 """Small HTTP transport abstractions used by external providers."""
 
 from collections.abc import Mapping
-from typing import BinaryIO, Protocol
+from types import TracebackType
+from typing import BinaryIO, Protocol, Self
 
 import httpx
 
@@ -44,7 +45,26 @@ class HttpxTransport:
         Args:
             client: Optional client to use for requests.
         """
-        self._client = client or httpx.Client()
+        self._owns_client = client is None
+        self._client = client if client is not None else httpx.Client()
+
+    def close(self) -> None:
+        """Close the client only when this transport created it."""
+        if self._owns_client:
+            self._client.close()
+
+    def __enter__(self) -> Self:
+        """Return this transport for scoped connection reuse."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Release owned resources when the context exits."""
+        self.close()
 
     def request(
         self,
