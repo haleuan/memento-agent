@@ -40,7 +40,7 @@ with AgentRuntime(model=model, api_key=api_key) as runtime:
 
 ## Achievement Draft Review
 
-The user reviews a draft through the Agent conversation. The Agent turns a natural-language reply such as confirmation, a field correction, a description edit, or rejection into a structured `AchievementReviewDecision`. The review module validates that decision and returns an in-memory reviewed draft while preserving the original extracted draft. User corrections remain separate from source-supported facts, and the review module does not create or save a record. Natural-language interpretation, CLI presentation, and draft-to-record conversion remain separate work.
+`AchievementReviewAgent` gives the model a structured draft containing the extracted facts, source identifier, and any description suggestion. The model must use the `ask_user` tool to generate the opening summary and review prompt, then can ask focused follow-up questions when the reply is ambiguous. It accepts natural-language confirmation, field corrections, description edits, or rejection. The Agent returns a structured `AchievementReviewDecision`; the deterministic review function applies it and returns an in-memory reviewed draft while preserving the original extracted draft. User corrections and description text remain separate from source-supported facts. This step does not create or save a record, and it is a conversation boundary rather than a CLI or UI workflow.
 
 ## MinerU Parser Configuration
 

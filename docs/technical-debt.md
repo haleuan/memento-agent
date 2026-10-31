@@ -66,9 +66,9 @@ comment should be brief and reference the relevant debt ID.
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/agents/extraction.py` and `src/mementoagent/agents/review.py`
-- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional, unconfirmed description suggestion. A structured review API now accepts the Agent's conversational decision and preserves original and reviewed values, but it does not include occurrence dates, create a `RecordEnvelope`, generate record metadata, write evidence, or save a TOML record. Reviewed data therefore still needs a separate materialization path before entering the workspace.
-- **Reason deferred**: Conversational review and deterministic application of a structured decision are now isolated from persistence. Date interpretation must remain deterministic, and draft-to-record conversion, provenance for user corrections, evidence generation, and saving need their own explicit contract.
-- **Review trigger**: Before a user-facing workflow needs to approve, edit, date, or persist an extracted achievement.
+- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional description suggestion. `AchievementReviewAgent` now starts a bounded natural-language review conversation, asks for clarification when needed, and produces a structured decision. The deterministic review function preserves original and reviewed values, but the flow still does not include occurrence dates, create a `RecordEnvelope`, generate record metadata, write evidence, or save a TOML record. Reviewed data therefore still needs a separate materialization path before entering the workspace.
+- **Reason deferred**: Conversational interpretation and deterministic application are now isolated from persistence. Date interpretation must remain deterministic, and draft-to-record conversion, provenance for user corrections, evidence generation, and saving need their own explicit contract.
+- **Review trigger**: Before a user-facing workflow needs to date or persist an approved reviewed achievement.
 - **Completion criteria**: Raw date text is passed through a deterministic parser into `PartialDate`; a deterministic draft-to-record conversion distinguishes source-supported values from user corrections, creates envelope metadata and source-level evidence, and persists only an approved record, with tests.
 
 ## TD-007: Expand the Agent Runtime Beyond One Structured Turn
@@ -97,3 +97,12 @@ comment should be brief and reference the relevant debt ID.
 - **Reason deferred**: The current synchronous parser needs bounded polling and honest timeout semantics. Cancellable or streaming requests would expand the transport contract beyond this repair.
 - **Review trigger**: When a user-facing workflow requires a hard elapsed-time guarantee or cancellation of slow uploads/downloads.
 - **Completion criteria**: The transport and parser define interruption and resource-cleanup behavior, enforce the required elapsed-time bound during active I/O, and have offline tests for slow-progress requests and cancellation without partial-success snapshots.
+
+## TD-010: Repository-Wide English Source and Documentation
+
+- **Status**: `accepted`
+- **Location**: Existing Python fixtures and schema examples under `src/`, plus any legacy project documentation containing non-English text
+- **Current state and impact**: The review Agent implementation and its directly updated documentation use English, but older test fixtures and schema examples still contain Chinese text. This makes the repository language convention inconsistent and can obscure whether non-English text is test data or an application message.
+- **Reason deferred**: The current change is limited to the review Agent's conversation boundary. A repository-wide text migration would touch unrelated fixtures and examples without changing runtime behavior.
+- **Review trigger**: Before publishing the repository as an English-only reference implementation or when another broad documentation/code cleanup is scheduled.
+- **Completion criteria**: All Python source, tests, Markdown documentation, and schema example strings are English, while user-provided sample documents remain explicitly marked as data or excluded from the source-language policy; scans enforce the chosen boundary.

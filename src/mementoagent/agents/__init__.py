@@ -13,6 +13,7 @@ from .review import (
     ReviewedAchievementDraft,
     review_achievement_draft,
 )
+from .review_agent import AchievementReviewAgent, AchievementReviewError
 from .runtime import AgentRuntime, AgentRuntimeError
 from .tools import ToolSpec
 
@@ -25,6 +26,8 @@ __all__ = [
     "AchievementReviewDecision",
     "ReviewedAchievementDraft",
     "review_achievement_draft",
+    "AchievementReviewAgent",
+    "AchievementReviewError",
     "AgentRuntime",
     "AgentRuntimeError",
     "BaseAgent",
