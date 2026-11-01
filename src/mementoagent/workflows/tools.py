@@ -18,9 +18,15 @@ from mementoagent.capabilities.achievement import (
     extract_achievement as extract_capability,
 )
 from mementoagent.parsers import Parser, parse_and_save_snapshot
-from mementoagent.schema import AchievementItem, ParseSnapshot
+from mementoagent.schema import AchievementItem, ParseSnapshot, RecordId
 from mementoagent.validation import validate_record
-from mementoagent.workspace import import_source, load_parse_snapshot, save_record
+from mementoagent.workspace import (
+    import_source,
+    iter_record_paths,
+    load_parse_snapshot,
+    load_raw_record,
+    save_record,
+)
 
 
 class _NoArguments(BaseModel):
@@ -45,6 +51,14 @@ class _SaveAchievementArguments(BaseModel):
     data: AchievementItem
 
 
+class _RecordIdArguments(BaseModel):
+    """Arguments for loading one record by its identifier."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    record_id: RecordId
+
+
 @dataclass
 class MementoContext:
     """Mutable state scoped to one Memento Agent session."""
@@ -56,110 +70,178 @@ class MementoContext:
     draft: AchievementDraft | None = None
 
 
-def build_memento_tools() -> Sequence[ToolSpec[Any]]:
-    """Build the semantic tools available to a Memento Agent."""
-    return (
-        ToolSpec(
-            name="list_inbox",
-            description="List files currently available in the workspace inbox.",
-            parameters=_NoArguments,
-            handler=_list_inbox,
-        ),
-        ToolSpec(
-            name="prepare_source",
-            description=(
-                "Import and parse one file from the workspace inbox, "
-                "then keep its snapshot available for extraction."
+class MementoToolset:
+    """Build and execute tools bound to one Memento session context."""
+
+    def __init__(self, context: MementoContext) -> None:
+        """Bind the toolset to one session context."""
+        self._context = context
+
+    def specs(self) -> Sequence[ToolSpec[Any]]:
+        """Return the semantic tools available to the Memento Agent."""
+        return (
+            ToolSpec(
+                name="list_inbox",
+                description="List files currently available in the workspace inbox.",
+                parameters=_NoArguments,
+                handler=self.list_inbox,
             ),
-            parameters=_FilenameArguments,
-            handler=_prepare_source,
-        ),
-        ToolSpec(
-            name="extract_achievement",
-            description=(
-                "Extract one achievement from the currently prepared parse snapshot."
+            ToolSpec(
+                name="prepare_source",
+                description=(
+                    "Import and parse one file from the workspace inbox, "
+                    "then keep its snapshot available for extraction."
+                ),
+                parameters=_FilenameArguments,
+                handler=self.prepare_source,
             ),
-            parameters=_NoArguments,
-            handler=_extract_achievement,
-        ),
-        ToolSpec(
-            name="save_achievement",
-            description=(
-                "Save a complete user-confirmed achievement using the "
-                "source from the current draft."
+            ToolSpec(
+                name="extract_achievement",
+                description=(
+                    "Extract one achievement from the currently prepared parse snapshot."
+                ),
+                parameters=_NoArguments,
+                handler=self.extract_achievement,
             ),
-            parameters=_SaveAchievementArguments,
-            handler=_save_achievement,
-        ),
-    )
+            ToolSpec(
+                name="save_achievement",
+                description=(
+                    "Save a complete user-confirmed achievement using the "
+                    "source from the current draft."
+                ),
+                parameters=_SaveAchievementArguments,
+                handler=self.save_achievement,
+            ),
+            ToolSpec(
+                name="list_records",
+                description="List stored records with generic metadata and summaries.",
+                parameters=_NoArguments,
+                handler=self.list_records,
+            ),
+            ToolSpec(
+                name="get_record",
+                description="Load one stored record by its record identifier.",
+                parameters=_RecordIdArguments,
+                handler=self.get_record,
+            ),
+        )
 
+    def list_inbox(
+        self,
+        _arguments: _NoArguments,
+        _runtime_context: object | None,
+    ) -> list[str]:
+        """List files currently available in the workspace inbox."""
+        inbox = self._context.workspace_root / "inbox"
+        return sorted(
+            path.relative_to(inbox).as_posix()
+            for path in inbox.rglob("*")
+            if path.is_file()
+        )
 
-def _context(value: object | None) -> MementoContext:
-    if not isinstance(value, MementoContext):
-        raise ValueError("Memento tools require an application context")
-    return value
+    def prepare_source(
+        self,
+        arguments: _FilenameArguments,
+        _runtime_context: object | None,
+    ) -> dict[str, str]:
+        """Import and parse one file from the workspace inbox."""
+        relative_path = Path(arguments.filename)
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise ValueError("filename must be relative to the workspace inbox")
 
+        source_path = self._context.workspace_root / "inbox" / relative_path
+        if not source_path.is_file():
+            raise FileNotFoundError(arguments.filename)
 
-def _list_inbox(_arguments: _NoArguments, value: object | None) -> list[str]:
-    context = _context(value)
-    inbox = context.workspace_root / "inbox"
-    return sorted(
-        path.relative_to(inbox).as_posix()
-        for path in inbox.rglob("*")
-        if path.is_file()
-    )
+        source = import_source(self._context.workspace_root, source_path)
+        snapshot_dir = parse_and_save_snapshot(
+            self._context.workspace_root, source, self._context.parser
+        )
+        snapshot = load_parse_snapshot(snapshot_dir)
+        self._context.snapshot = snapshot
+        self._context.draft = None
+        return {
+            "source": snapshot.metadata.source,
+            "parse_id": snapshot.metadata.parse_id,
+            "parser": snapshot.metadata.parser,
+            "parser_version": snapshot.metadata.parser_version,
+        }
 
+    def extract_achievement(
+        self,
+        _arguments: _NoArguments,
+        _runtime_context: object | None,
+    ) -> dict[str, Any]:
+        """Extract one achievement from the prepared parse snapshot."""
+        if self._context.snapshot is None:
+            raise ValueError("prepare a source before extracting an achievement")
 
-def _prepare_source(
-    arguments: _FilenameArguments,
-    value: object | None,
-) -> dict[str, str]:
-    context = _context(value)
-    relative_path = Path(arguments.filename)
-    if relative_path.is_absolute() or ".." in relative_path.parts:
-        raise ValueError("filename must be relative to the workspace inbox")
+        self._context.draft = extract_capability(
+            self._context.runtime, self._context.snapshot
+        )
+        return self._context.draft.model_dump(mode="json")
 
-    source_path = context.workspace_root / "inbox" / relative_path
-    if not source_path.is_file():
-        raise FileNotFoundError(arguments.filename)
+    def save_achievement(
+        self,
+        arguments: _SaveAchievementArguments,
+        _runtime_context: object | None,
+    ) -> str:
+        """Save a complete user-confirmed achievement."""
+        if self._context.draft is None:
+            raise ValueError("extract an achievement before saving it")
 
-    source = import_source(context.workspace_root, source_path)
-    snapshot_dir = parse_and_save_snapshot(
-        context.workspace_root, source, context.parser
-    )
-    snapshot = load_parse_snapshot(snapshot_dir)
-    context.snapshot = snapshot
-    context.draft = None
-    return {
-        "source": snapshot.metadata.source,
-        "parse_id": snapshot.metadata.parse_id,
-        "parser": snapshot.metadata.parser,
-        "parser_version": snapshot.metadata.parser_version,
-    }
+        record = materialize_achievement(self._context.draft, arguments.data)
+        errors = validate_record(self._context.workspace_root, record)
+        if errors:
+            raise ValueError("record validation failed")
+        return str(save_record(self._context.workspace_root, record))
 
+    def list_records(
+        self,
+        _arguments: _NoArguments,
+        _runtime_context: object | None,
+    ) -> list[dict[str, object]]:
+        """List stored records with generic metadata and summaries."""
+        summaries: list[dict[str, object]] = []
+        for path in iter_record_paths(self._context.workspace_root):
+            record = load_raw_record(path)
+            data = record.get("data")
+            summary: dict[str, object] = {}
+            if isinstance(data, dict):
+                if record.get("schema") == "achievement/1":
+                    for key in ("title", "kind", "organization"):
+                        item = data.get(key)
+                        if isinstance(item, str):
+                            summary[key] = item
+                elif isinstance(data.get("title"), str):
+                    summary["title"] = data["title"]
 
-def _extract_achievement(
-    _arguments: _NoArguments,
-    value: object | None,
-) -> dict[str, Any]:
-    context = _context(value)
-    if context.snapshot is None:
-        raise ValueError("prepare a source before extracting an achievement")
+            summaries.append(
+                {
+                    "id": record.get("id"),
+                    "schema": record.get("schema"),
+                    "provenance": record.get("provenance"),
+                    "created_at": record.get("created_at"),
+                    "occurred": record.get("occurred"),
+                    "path": path.relative_to(self._context.workspace_root).as_posix(),
+                    "summary": summary,
+                }
+            )
+        return summaries
 
-    context.draft = extract_capability(context.runtime, context.snapshot)
-    return context.draft.model_dump(mode="json")
-
-
-def _save_achievement(
-    arguments: _SaveAchievementArguments,
-    value: object | None,
-) -> str:
-    context = _context(value)
-    if context.draft is None:
-        raise ValueError("extract an achievement before saving it")
-
-    record = materialize_achievement(context.draft, arguments.data)
-    errors = validate_record(context.workspace_root, record)
-    if errors:
-        raise ValueError("record validation failed")
-    return str(save_record(context.workspace_root, record))
+    def get_record(
+        self,
+        arguments: _RecordIdArguments,
+        _runtime_context: object | None,
+    ) -> dict[str, object]:
+        """Load one stored record by its record identifier."""
+        matches = [
+            path
+            for path in iter_record_paths(self._context.workspace_root)
+            if path.stem == arguments.record_id
+        ]
+        if not matches:
+            raise FileNotFoundError(arguments.record_id)
+        if len(matches) > 1:
+            raise ValueError("duplicate record identifier")
+        return load_raw_record(matches[0])

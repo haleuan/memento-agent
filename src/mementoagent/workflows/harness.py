@@ -16,7 +16,7 @@ from mementoagent.agents import (
 )
 from mementoagent.parsers import Parser
 
-from .tools import MementoContext, build_memento_tools
+from .tools import MementoContext, MementoToolset
 
 _MEMENTO_INSTRUCTIONS = """You are the Memento personal memory assistant.
 Understand the user's intent and choose tools when workspace actions are needed.
@@ -60,11 +60,12 @@ class MementoAgent:
             parser=parser,
             runtime=runtime,
         )
+        self._toolset = MementoToolset(self._context)
         self._session = AgentSession(context=self._context)
 
     def tools(self) -> Sequence[ToolSpec[Any]]:
         """Return semantic workspace and achievement tools."""
-        return build_memento_tools()
+        return self._toolset.specs()
 
     def subagents(self) -> Sequence[AgentTask[str, Any]]:
         """Return no concrete subagents in the first application version."""
