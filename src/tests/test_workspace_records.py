@@ -14,7 +14,12 @@ from mementoagent.schema import (
 )
 from mementoagent.schema.envelope import TimeRange
 from mementoagent.schema.types import PartialDate
-from mementoagent.workspace import load_record, save_record
+from mementoagent.workspace import (
+    iter_record_paths,
+    load_raw_record,
+    load_record,
+    save_record,
+)
 
 VALID_RECORD_ID = "ach_01JBX7Q3M8K2N5R9V4W6Y0ZDEF"
 VALID_HASH = "sha256:" + "a" * 64
@@ -68,6 +73,54 @@ def test_load_record_round_trips_structured_record(tmp_path: Path) -> None:
     loaded = load_record(path, AchievementItem)
 
     assert loaded == record
+
+
+def test_iter_record_paths_returns_empty_for_workspace_without_records(
+    tmp_path: Path,
+) -> None:
+    """Return no paths when a workspace has no records directory."""
+    assert iter_record_paths(tmp_path) == []
+
+
+def test_iter_record_paths_returns_sorted_toml_paths(tmp_path: Path) -> None:
+    """Return direct record TOML files in deterministic order."""
+    first = tmp_path / "records" / "achievement" / "ach_first.toml"
+    second = tmp_path / "records" / "note" / "note_second.toml"
+    first.parent.mkdir(parents=True)
+    second.parent.mkdir(parents=True)
+    first.write_text("id = 'ach_first'\n", encoding="utf-8")
+    second.write_text("id = 'note_second'\n", encoding="utf-8")
+    (tmp_path / "records" / "ignored.toml").write_text(
+        "id = 'ignored'\n", encoding="utf-8"
+    )
+
+    assert iter_record_paths(tmp_path) == [first, second]
+
+
+def test_load_raw_record_returns_unknown_record_shape(tmp_path: Path) -> None:
+    """Read a valid unknown record payload without Pydantic validation."""
+    path = tmp_path / "note.toml"
+    path.write_text(
+        'id = "note_01JBX7Q3M8K2N5R9V4W6Y0ZDEF"\n'
+        'schema = "note/1"\n[data]\n'
+        'arbitrary = "value"\n',
+        encoding="utf-8",
+    )
+
+    assert load_raw_record(path) == {
+        "id": "note_01JBX7Q3M8K2N5R9V4W6Y0ZDEF",
+        "schema": "note/1",
+        "data": {"arbitrary": "value"},
+    }
+
+
+def test_load_raw_record_rejects_invalid_toml(tmp_path: Path) -> None:
+    """Reject malformed TOML while preserving a clear error boundary."""
+    path = tmp_path / "invalid.toml"
+    path.write_text("id = [", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid TOML record"):
+        load_raw_record(path)
 
 
 def test_record_round_trips_reference_tables(tmp_path: Path) -> None:
