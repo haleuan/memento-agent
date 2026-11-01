@@ -7,68 +7,64 @@ Accepted
 ## Context
 
 Memento is intended to be a usable Agent system and an inspectable example of
-Agent runtime engineering. The previous Harness delegated the model loop,
-structured output handling, and tool composition to the OpenAI Agents SDK.
-That reduced local code, but it also hid the execution mechanisms that this
-project needs to make explicit and evolve deliberately.
+Agent runtime engineering. The project therefore uses the official `openai`
+Python SDK for transport and Responses API types while keeping the execution
+loop and application boundaries in the repository.
 
-The current workflow needs only synchronous Responses API calls, typed task
-outputs, and a bounded function-tool loop. It does not yet need sessions,
-handoffs, ReAct orchestration, durable state, or asynchronous execution.
+The runtime must support both one-shot structured capabilities, such as
+achievement extraction, and a user-facing conversational Agent. These modes
+share tool dispatch and execution limits but have different output contracts.
 
 ## Decision
 
-Use the official `openai` Python SDK for transport and Responses API types, and
-keep the Agent runtime in Memento. The runtime owns the following boundaries:
+The local runtime owns the following boundaries:
 
-- `AgentTask` defines the protocol consumed by the Runtime. `TaskSpec` provides
-  an immutable declarative implementation for task instructions, input
-  conversion, output type, and optional tools or composable subagents.
-- `ToolSpec` explicitly declares a tool name, description, Pydantic argument
-  model, and callable handler.
-- `AgentRuntime` creates or accepts an OpenAI client and owns the Responses
-  request loop, tool dispatch, execution limits, and output/error boundaries.
-- The SDK's `responses.parse()` and public Pydantic tool helper adapt schemas
-  to the Responses protocol and parse typed results. The Runtime replays SDK
-  output items through the SDK serializer, including tool call identifiers and
-  reasoning items, without adding SDK-only parsed fields to request payloads.
-- `RunState` is in-memory and scoped to one invocation. The public runtime API
-  returns only the task's validated output, not SDK responses, usage, or traces.
+- `AgentTask` and immutable `TaskSpec` declare one-shot structured tasks.
+- `AgentDefinition` describes a conversational Agent's instructions, tools,
+  limits, and optional subagents.
+- `ToolSpec` declares a tool name, description, Pydantic argument model, and
+  callable handler.
+- `AgentRuntime.run()` executes a bounded structured task using
+  `responses.parse()`.
+- `AgentRuntime.run_turn()` executes a conversational turn using
+  `responses.create()`, replays local session items, dispatches tools, and
+  returns only an `AgentTurn` containing user-visible text.
+- `AgentSession` is in-memory and scoped to one user conversation. It stores
+  SDK input items internally but does not expose SDK responses to application
+  code.
+- `AgentEvent` exposes only safe phase and tool-name metadata for a future TUI;
+  it never contains credentials, raw arguments, document text, or tool output.
 
-`max_turns` counts model requests and defaults to one. Tasks that use tools
-must opt into additional model requests. Tool calls are capped independently
-by `max_tool_calls`, and invalid tool names, arguments, handler failures, or
-non-serializable results terminate the run through one runtime error boundary.
+The default runtime limit remains one model request and eight tool calls.
+Conversational Agents may declare higher limits explicitly. Tool failures in a
+conversation become sanitized model-readable tool results; API and Runtime
+failures remain `AgentRuntimeError` failures. No automatic retry policy is
+introduced.
 
-Subagents remain a composition point rather than a global registry. A manager
-may expose a bounded subagent as an internal tool; handoffs and concrete
-subagent implementations are deferred until a real task requires them.
+Subagents remain a composition point rather than a global registry. Handoffs,
+persistent sessions, resume, context compression, asynchronous execution,
+ReAct orchestration, and production observability remain deferred.
 
 ## Consequences
 
-- The core request and tool execution path is visible, testable, and owned by
-  the project.
-- The project depends on the stable OpenAI Python SDK rather than adopting a
-  second Agent orchestration framework as a core dependency.
-- The first implementation has a deliberately narrow synchronous scope. It
-  does not provide sessions, context compression, resume, handoffs, ReAct,
-  asynchronous execution, or production trace/usage observability.
-- Future runtime changes must preserve source provenance boundaries and must
-  add an explicit state and failure contract before expanding execution scope.
-
-Task-specific declarations and user-facing orchestration belong outside the
-generic `agents` package. Achievement extraction and review are workflow code;
-the Runtime must not import those workflows.
+- The model controls the order in which application capabilities run.
+- Structured extraction remains testable as a one-shot task without becoming a
+  user-facing specialized Agent.
+- Conversation state can later be rendered by a CLI, TUI, or web adapter
+  without changing the Runtime.
+- The project depends on the official OpenAI Python SDK rather than adopting a
+  second Agent orchestration framework.
+- Runtime changes must preserve source provenance boundaries and add an
+  explicit state and failure contract before expanding execution scope.
 
 ## Rejected alternative
 
 Using the OpenAI Agents SDK as the core runtime would provide mature loop and
 tool abstractions, but would move the implementation of those mechanisms out
-of this project. It remains a possible reference for future design, not a
-runtime dependency.
+of this project. It remains a reference for design, not a runtime dependency.
 
 ## Future trigger
 
-Add sessions, durable state, handoffs, context management, asynchronous APIs,
-or concrete subagents only when a user-facing workflow demonstrates the need
+Add persistence, resume, handoffs, context management, asynchronous APIs, or
+concrete subagents only when a user-facing conversation demonstrates the need
 and the behavior can be covered by offline runtime tests.

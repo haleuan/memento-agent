@@ -19,35 +19,74 @@ content.md
 
 Snapshot metadata and records are structured TOML. `content.md` preserves the parser's raw text output. Record evidence points directly to the original source file. Page and quote may be included as optional context, but validation only checks that the referenced source exists; it does not require parse snapshots or match quotes to parse blocks.
 
-## Achievement Extraction
+## Agent Runtime and Application Harness
 
-The achievement workflow runs a declared extraction task through the project's local Agent Runtime. It reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Organization is optional because some credentials do not need a useful issuer value. Event dates are not included yet because date interpretation belongs in deterministic code.
+The project uses the official OpenAI Python SDK behind a project-owned Agent
+Runtime. `TaskSpec` declares one-shot structured tasks such as achievement
+extraction. `AgentSession` and `run_turn()` provide local in-memory replay for
+the user-facing conversational Agent. The Runtime owns the Responses request
+loop, tool dispatch, execution limits, and error boundaries; it does not expose
+SDK response objects, usage, or credentials to application code.
 
-## Agent Runtime
+`workflows/harness.py` assembles the root `MementoAgent`, its workspace context,
+and semantic capability tools. The model decides which capability to call and
+when to stop. `capabilities/achievement/` contains deterministic domain
+operations and the structured extraction task; it does not own the user
+conversation or a fixed source-to-record sequence.
 
-The project uses the official OpenAI Python SDK behind a small local Runtime. A generic `TaskSpec` declares instructions, structured output type, input conversion, and optional tools or subagents. The SDK adapts Pydantic schemas and parses structured responses; the Runtime owns the synchronous request loop, in-memory run state, tool dispatch, execution limits, and error boundaries. It returns only the task's typed output and does not expose SDK response objects, usage, or credentials to workflow code.
-
-Tools use explicit `ToolSpec` declarations. A manager can compose future bounded subagents as internal tools, while the manager retains control of the conversation. Session persistence, handoffs, ReAct orchestration, asynchronous execution, and concrete subagent implementations are not part of the current implementation.
+Tools use explicit `ToolSpec` declarations. Bounded subagents remain a future
+composition point. Persistent sessions, handoffs, ReAct orchestration,
+asynchronous execution, and concrete subagent implementations are not part of
+the current implementation.
 
 Use `AgentRuntime` as a context manager when it creates its own OpenAI client:
 
 ```python
 from mementoagent.agents import AgentRuntime
-from mementoagent.workflows.achievement import extract_achievement
+from mementoagent.capabilities.achievement import extract_achievement
 
 with AgentRuntime(model=model, api_key=api_key) as runtime:
     draft = extract_achievement(runtime, snapshot)
 ```
 
-## Achievement Draft Review
+Create one `MementoAgent` for a user conversation. It receives ordinary user
+messages, chooses capability tools, and can stop after inspection or extraction
+without creating a record. The application does not prescribe a fixed
+source-to-record sequence.
 
-The achievement review workflow gives the model a structured draft containing the extracted facts, source identifier, and any description suggestion. The model must use the `ask_user` tool to generate the opening summary and review prompt, then can ask focused follow-up questions when the reply is ambiguous. It accepts natural-language confirmation, field corrections, description edits, or rejection. The workflow returns a structured `AchievementReviewDecision`; deterministic review logic applies it and returns an in-memory reviewed draft while preserving the original extracted draft. User corrections and description text remain separate from source-supported facts during review. This step does not create or save a record, and it is a conversation boundary rather than a CLI or UI workflow.
+```python
+from mementoagent.agents import AgentRuntime
+from mementoagent.workflows import MementoAgent
 
-## Achievement Record Materialization
+with AgentRuntime(model=model, api_key=api_key) as runtime:
+    agent = MementoAgent(
+        workspace_root,
+        parser,
+        runtime,
+    )
+    turn = agent.send("Process the certificate in my inbox.")
+    print(turn.text)
+```
 
-An approved reviewed draft can be converted to a `RecordEnvelope[AchievementItem]` by the deterministic `materialize_achievement()` workflow. The converter preserves the record-level `document` provenance and adds one source-level evidence item containing the original source hash. It leaves `evidence.supports` empty because the current contract does not claim field-level quote or page grounding. OCR corrections remain corrections to source-derived facts; they do not change the record provenance. A user-approved description is copied into `data.description` during materialization, while organization may remain absent when the source does not provide a useful issuer.
+The extraction capability reads a `ParseSnapshot` and returns an in-memory
+`AchievementDraft`. Document-supported facts are validated with the
+`AchievementItem` schema, and the source hash comes from snapshot metadata. A
+draft may contain one optional `description_suggestion`; it is an unconfirmed
+proposal and must not invent personal responsibilities, impact, or metrics.
+Organization is optional because some credentials do not need a useful issuer
+value. Event dates are not included yet because date interpretation belongs in
+deterministic code.
 
-Materialization does not parse dates, validate or save workspace files, or create interactive prompts. Callers pass the resulting record through the existing `validate_record()` and `save_record()` functions. Occurrence dates, page/quote evidence, and finer-grained claim provenance remain future work.
+When the user explicitly confirms a complete `AchievementItem`, the Agent can
+call the achievement save capability. Materialization preserves record-level
+`document` provenance, uses the original source hash as evidence with an empty
+`supports` list, and writes the accepted description into `data.description`.
+The capability then reuses `validate_record()` and `save_record()`.
+
+Future TUI input will keep slash commands such as `/init` and `/check` in a
+deterministic outer command layer. Ordinary natural-language input will be
+forwarded to `MementoAgent.send()`; the Runtime does not depend on terminal
+rendering.
 
 ## MinerU Parser Configuration
 

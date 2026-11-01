@@ -62,32 +62,51 @@ comment should be brief and reference the relevant debt ID.
 - **Review trigger**: When evidence or generated materials need page layout, images, tables, coordinates, raw MinerU responses, or parser replay/comparison.
 - **Completion criteria**: The snapshot contract defines an artifact manifest and preserves the required MinerU ZIP/JSON/assets/layout outputs with content hashes, deterministic paths, and tests that load and verify the complete artifact set.
 
-## TD-006: Review and Materialize Achievement Drafts
+## TD-006: Achievement Capability Depth
 
 - **Status**: `accepted`
-- **Location**: `src/mementoagent/workflows/achievement/`
-- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional description suggestion. The achievement review workflow starts a bounded natural-language review conversation, asks for clarification when needed, and produces a structured decision. Approved drafts now materialize deterministically into `RecordEnvelope[AchievementItem]` values with generated identity, accepted descriptions, record-level `document` provenance, and source-only evidence; callers reuse existing validation and TOML persistence.
-- **Reason deferred**: The first materialization contract intentionally stops at source-level traceability. Date interpretation, field-level provenance, page/quote grounding, and detailed source claim mapping need separate contracts and real consumers.
-- **Review trigger**: When a user-facing workflow needs occurrence dates, page/quote evidence, or different provenance semantics for user-authored facts.
-- **Completion criteria**: A deterministic date parser produces `PartialDate`; evidence can identify supported claims at the required precision; and provenance semantics distinguish source facts, OCR corrections, and user additions without weakening source traceability.
+- **Location**: `src/mementoagent/capabilities/achievement/`
+- **Current state and impact**: Achievement extraction, Agent confirmation, deterministic materialization, source validation, and TOML persistence are connected through the root `MementoAgent`. The capability preserves source-level provenance and accepted descriptions, but occurrence dates remain unset and evidence has no page, quote, or field-level supports.
+- **Reason deferred**: Date interpretation and fine-grained claim mapping require concrete consumers and contracts; adding them to the first Agent-driven path would make the capability responsible for unsupported certainty.
+- **Review trigger**: When generated outputs need occurrence dates, page or quote references, or different provenance semantics for user-authored facts.
+- **Completion criteria**: A deterministic date parser produces `PartialDate`; evidence identifies supported claims at the required precision; and provenance semantics distinguish source facts, OCR corrections, and user additions without weakening source traceability.
 
-## TD-011: General Workflow Orchestration
-
-- **Status**: `accepted`
-- **Location**: `src/mementoagent/workflows/` and `src/mementoagent/agents/`
-- **Current state and impact**: The generic Runtime executes declarative task specifications, while achievement extraction and review live in a workflow package. There is no general workflow coordinator for composing multiple domain tasks, managing shared user conversations, or materializing results across record types.
-- **Reason deferred**: Only the achievement workflow currently exists. A coordinator abstraction would be speculative until a second domain workflow demonstrates shared sequencing or state requirements.
-- **Review trigger**: When a second domain workflow needs to compose extraction, user review, provenance handling, or record materialization with the achievement workflow.
-- **Completion criteria**: A workflow coordinator has an explicit input, state, error, and ownership contract; generic Runtime code remains independent of workflow modules; and at least two workflows exercise the shared orchestration through offline tests.
-
-## TD-007: Expand the Agent Runtime Beyond One Structured Turn
+## TD-011: Cross-Domain Capability Composition
 
 - **Status**: `accepted`
-- **Location**: `src/mementoagent/agents/task.py`, `src/mementoagent/agents/runtime.py`, and `src/mementoagent/agents/tools.py`
-- **Current state and impact**: The project-owned Runtime uses the OpenAI Python SDK for Pydantic schema adaptation and structured response parsing, while owning the synchronous Responses request loop, in-memory state, and bounded function-tool execution. Subagent tools accept string input, but no concrete subagent workflow exists. It does not persist sessions, resume interrupted runs, compress long contexts, perform handoffs, expose production observability, or define shared execution budgets for nested runs.
-- **Reason deferred**: The current extraction task only needs a bounded synchronous run. Durable state, richer context management, handoffs, and asynchronous execution would enlarge the runtime contract before a concrete workflow requires them.
-- **Review trigger**: When a task needs a real subagent, multi-turn conversation state, human interruption/resume, long-context management, handoff ownership, asynchronous execution, or production run observability.
-- **Completion criteria**: Each required capability has an explicit state and failure contract, and an end-to-end task has offline tests for execution limits, nested run budgets, resumption, subagent boundaries, context management, and sensitive-data handling.
+- **Location**: `src/mementoagent/workflows/` and `src/mementoagent/capabilities/`
+- **Current state and impact**: The Memento workflow harness currently composes one root Agent with achievement capabilities. There is no shared capability registry or reusable cross-domain coordinator.
+- **Reason deferred**: A second domain has not yet demonstrated a shared sequencing or context requirement. A generic coordinator now would recreate the fixed workflow problem the Agent-centered design removes.
+- **Review trigger**: When a second domain needs to share session context, capability registration, approval boundaries, or materialization rules with achievement.
+- **Completion criteria**: A coordinator has an explicit input, state, error, and ownership contract; generic Runtime code remains independent of capabilities; and at least two domains exercise the shared composition through offline tests.
+
+## TD-007: Expand the Agent Runtime Beyond In-Memory Turns
+
+- **Status**: `accepted`
+- **Location**: `src/mementoagent/agents/`
+- **Current state and impact**: The Runtime now supports bounded conversational turns with in-memory replay, safe event metadata, one-shot structured tasks, and explicit tools. It does not persist sessions, resume interrupted runs, compress long contexts, perform handoffs, expose production observability, or define shared budgets for nested runs.
+- **Reason deferred**: The first user-facing Agent needs only process-local conversation state. Durable state and richer orchestration would expand the runtime contract before a concrete workflow requires them.
+- **Review trigger**: When a task needs persistent sessions, human interruption and resume, long-context management, handoff ownership, asynchronous execution, or production run observability.
+- **Completion criteria**: Each required capability has an explicit state and failure contract, and an end-to-end task has offline tests for execution limits, nested budgets, resumption, context management, and sensitive-data handling.
+
+## TD-012: TUI and Slash Command Adapter
+
+- **Status**: `accepted`
+- **Location**: `src/mementoagent/cli.py` and the future TUI adapter
+- **Current state and impact**: The repository exposes the deterministic
+  `memento check` command and the TUI-neutral `MementoAgent.send()` API. There
+  is no terminal renderer, interactive session loop, or slash command
+  dispatcher.
+- **Reason deferred**: The Agent and Runtime boundaries must remain usable from
+  a web chat, test harness, or future TUI. Building a TUI before the
+  conversational Agent is exercised would couple presentation concerns to the
+  first workflow.
+- **Review trigger**: When users need an interactive terminal conversation or
+  commands such as `/init` and `/check` inside the TUI.
+- **Completion criteria**: The TUI renders `AgentTurn` text and optional safe
+  `AgentEvent` metadata; slash commands are dispatched deterministically before
+  ordinary text is sent to the Agent; and the Runtime remains independent of
+  terminal rendering.
 
 ## TD-008: Evaluate Strict Static Type Checking
 
@@ -111,7 +130,7 @@ comment should be brief and reference the relevant debt ID.
 
 - **Status**: `accepted`
 - **Location**: Existing Python fixtures and schema examples under `src/`, plus any legacy project documentation containing non-English text
-- **Current state and impact**: The review Agent implementation and its directly updated documentation use English, but older test fixtures and schema examples still contain Chinese text. This makes the repository language convention inconsistent and can obscure whether non-English text is test data or an application message.
-- **Reason deferred**: The current change is limited to the review Agent's conversation boundary. A repository-wide text migration would touch unrelated fixtures and examples without changing runtime behavior.
+- **Current state and impact**: The Agent Runtime, root MementoAgent, and their directly updated documentation use English, but older test fixtures and schema examples still contain Chinese text. This makes the repository language convention inconsistent and can obscure whether non-English text is test data or an application message.
+- **Reason deferred**: The current change is limited to the Agent-centered application boundary. A repository-wide text migration would touch unrelated fixtures and examples without changing runtime behavior.
 - **Review trigger**: Before publishing the repository as an English-only reference implementation or when another broad documentation/code cleanup is scheduled.
 - **Completion criteria**: All Python source, tests, Markdown documentation, and schema example strings are English, while user-provided sample documents remain explicitly marked as data or excluded from the source-language policy; scans enforce the chosen boundary.

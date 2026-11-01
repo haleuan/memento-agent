@@ -1,43 +1,48 @@
-# ADR-0007: Separate Generic Agent Runtime from Domain Workflows
+# ADR-0007: Separate Generic Runtime, Capability Code, and Agent Harness
 
 ## Status
 
-Accepted
+Superseded by [ADR-0009](0009-agent-centered-application-harness.md)
 
 ## Context
 
-The `agents` package previously contained both generic Runtime infrastructure
-and achievement-specific extraction and review classes. This made domain task
-code appear to be reusable Agent infrastructure and encouraged adding another
-specialized Agent class for every new task.
+The previous design put achievement extraction, conversational review, and a
+fixed source-to-record pipeline in a workflow package. Although generic Runtime
+code stayed separate, the workflow still owned the order of operations and
+reduced the model to a participant inside a scripted process.
 
-The project needs a reusable execution mechanism, while task-specific prompts,
-schemas, user conversations, and deterministic post-processing belong to the
-workflow that owns the domain semantics.
+Memento needs the model to control user-facing tool selection while keeping
+workspace mutation, schema validation, and record materialization deterministic.
 
 ## Decision
 
-Keep `agents` limited to the generic `AgentTask` protocol, immutable `TaskSpec`,
-`AgentRuntime`, and `ToolSpec`. A Runtime may execute any task satisfying the
-protocol and must not import workflow modules.
+The architecture has three separate layers:
 
-Move achievement extraction and conversational review into
-`workflows/achievement/`. They expose workflow functions and module-level task
-specifications instead of `AchievementExtractor` or `AchievementReviewAgent`
-classes. Their transient Pydantic models remain workflow contracts and stay
-separate from persisted models in `schema/`.
+- `agents/` contains generic Runtime infrastructure, task declarations,
+  sessions, and tool protocols. It must not import domain capabilities.
+- `capabilities/achievement/` contains achievement schemas used only during
+  extraction and deterministic materialization. It provides operations that an
+  Agent may call; it does not own a user conversation.
+- `workflows/harness.py` assembles the root `MementoAgent`, per-conversation
+  context, and semantic capability tools. It is an application harness, not a
+  fixed source-to-record pipeline.
 
-The project makes this migration directly without compatibility re-exports for
-the removed achievement Agent classes. Internal callers and tests use the new
-workflow APIs.
+The root Agent decides whether to inspect the inbox, prepare a source, extract
+facts, ask for clarification, or save a confirmed record. There is no generic
+`run_achievement_workflow()` coordinator and no achievement-specific Agent
+class.
+
+A future TUI remains an outer adapter. Slash commands such as `/init` and
+`/check` are dispatched deterministically; ordinary natural-language input is
+sent to the Agent session.
 
 ## Consequences
 
-- The generic Runtime can be reused by future domains without importing their
-  schemas or orchestration rules.
-- Achievement-specific prompts, tools, and post-processing remain cohesive in
-  one workflow package.
-- Adding a new domain requires a task specification and workflow function,
-  rather than another class in the generic `agents` package.
-- A general cross-domain workflow coordinator remains deferred until a second
-  domain demonstrates the need.
+- Adding a second domain can reuse the Runtime and session without adding a
+  specialized class to `agents/`.
+- Deterministic capability functions remain easy to test independently from
+  model behavior.
+- The model can stop after inspection or extraction instead of always creating
+  a record.
+- Persistent sessions, handoffs, concrete subagents, and additional workflow
+  composition remain deferred until a concrete use case requires them.
