@@ -39,16 +39,36 @@ def test_achievement_reference_rejects_invalid_data(data: dict[str, object]) -> 
 
 
 def test_achievement_item_accepts_required_fields() -> None:
-    """Construct an achievement from its required kind, title, and organization."""
+    """Construct an achievement from its required kind and title."""
+    result = AchievementItem(
+        kind="project",
+        title="Open Source Contribution",
+    )
+
+    assert result.kind == "project"
+    assert result.title == "Open Source Contribution"
+    assert result.organization is None
+
+
+def test_achievement_item_accepts_optional_organization() -> None:
+    """Preserve an organization when the source provides one."""
     result = AchievementItem(
         kind="project",
         title="Open Source Contribution",
         organization="Memento Agent",
     )
 
-    assert result.kind == "project"
-    assert result.title == "Open Source Contribution"
     assert result.organization == "Memento Agent"
+
+
+def test_achievement_item_rejects_empty_organization() -> None:
+    """Reject an organization value that contains no text."""
+    with pytest.raises(ValidationError):
+        AchievementItem(
+            kind="certificate",
+            title="Language Certificate",
+            organization="",
+        )
 
 
 def test_achievement_item_rejects_unknown_fields() -> None:
