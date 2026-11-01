@@ -17,12 +17,12 @@ from mementoagent.agents import (
     ToolSpec,
 )
 from mementoagent.agents import runtime as runtime_module
-from mementoagent.schema import AchievementItem, ParseSnapshot, ParseSnapshotMetadata
-from mementoagent.workflows.achievement import (
+from mementoagent.capabilities.achievement import (
     AchievementDraft,
     AchievementExtraction,
     extract_achievement,
 )
+from mementoagent.schema import AchievementItem, ParseSnapshot, ParseSnapshotMetadata
 
 
 class Output(BaseModel):

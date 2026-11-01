@@ -108,8 +108,12 @@ def test_agents_exports_only_generic_interfaces() -> None:
     assert set(agents.__all__) == {
         "AgentRuntime",
         "AgentRuntimeError",
+        "AgentDefinition",
+        "AgentEvent",
+        "AgentSession",
         "AgentTask",
         "TaskSpec",
+        "AgentTurn",
         "ToolSpec",
     }
     assert not any("Achievement" in name for name in vars(agents))

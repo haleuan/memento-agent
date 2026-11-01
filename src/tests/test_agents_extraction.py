@@ -6,17 +6,17 @@ import pytest
 from pydantic import ValidationError
 
 from mementoagent.agents.runtime import AgentRuntimeError
-from mementoagent.schema import (
-    AchievementItem,
-    ParseSnapshot,
-    ParseSnapshotMetadata,
-)
-from mementoagent.workflows.achievement import (
+from mementoagent.capabilities.achievement import (
     AchievementDraft,
     AchievementExtraction,
     AchievementExtractionError,
     DescriptionSuggestion,
     extract_achievement,
+)
+from mementoagent.schema import (
+    AchievementItem,
+    ParseSnapshot,
+    ParseSnapshotMetadata,
 )
 
 SOURCE = "sha256:" + "a" * 64
