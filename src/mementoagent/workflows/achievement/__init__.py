@@ -1,6 +1,10 @@
 """Achievement extraction and conversational review workflows."""
 
 from .extraction import AchievementExtractionError, extract_achievement
+from .materialization import (
+    AchievementMaterializationError,
+    materialize_achievement,
+)
 from .models import (
     AchievementDraft,
     AchievementExtraction,
@@ -18,11 +22,13 @@ __all__ = [
     "AchievementDraft",
     "AchievementExtraction",
     "AchievementExtractionError",
+    "AchievementMaterializationError",
     "AchievementReviewDecision",
     "AchievementReviewError",
     "DescriptionSuggestion",
     "ReviewedAchievementDraft",
     "extract_achievement",
+    "materialize_achievement",
     "review_achievement",
     "review_achievement_draft",
 ]
