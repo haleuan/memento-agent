@@ -14,6 +14,48 @@ InputT = TypeVar("InputT", contravariant=True)
 OutputT = TypeVar("OutputT", bound=BaseModel, covariant=True)
 
 
+class AgentDefinition(Protocol):
+    """Describe the model-facing parts shared by all Memento agents."""
+
+    @property
+    def name(self) -> str:
+        """Return the stable agent name."""
+        ...
+
+    @property
+    def description(self) -> str:
+        """Return the description used when composing an agent as a tool."""
+        ...
+
+    @property
+    def instructions(self) -> str:
+        """Return the model instructions for the agent."""
+        ...
+
+    @property
+    def model(self) -> str | None:
+        """Return an optional model override."""
+        ...
+
+    @property
+    def max_turns(self) -> int | None:
+        """Return an optional per-agent request limit."""
+        ...
+
+    @property
+    def max_tool_calls(self) -> int | None:
+        """Return an optional per-agent tool limit."""
+        ...
+
+    def tools(self) -> Sequence[ToolSpec[Any]]:
+        """Return the tools available to the agent."""
+        ...
+
+    def subagents(self) -> Sequence[AgentTask[str, Any]]:
+        """Return specialist tasks exposed as internal tools."""
+        ...
+
+
 class AgentTask(Protocol, Generic[InputT, OutputT]):
     """Describe one typed task that can be executed by the runtime."""
 
@@ -73,6 +115,8 @@ class TaskSpec(Generic[InputT, OutputT]):
     output_type: type[OutputT]
     input_builder: Callable[[InputT], str]
     model: str | None = None
+    max_turns: int | None = None
+    max_tool_calls: int | None = None
     tool_builder: Callable[[], Sequence[ToolSpec[Any]]] = _empty_tools
     subagent_builder: Callable[[], Sequence[AgentTask[str, Any]]] = _empty_subagents
 
