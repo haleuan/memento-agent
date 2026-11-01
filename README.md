@@ -34,6 +34,13 @@ when to stop. `capabilities/achievement/` contains deterministic domain
 operations and the structured extraction task; it does not own the user
 conversation or a fixed source-to-record sequence.
 
+The same Agent can read existing memory through the read-only `list_records`
+and `get_record` tools. Lists contain generic envelope metadata and
+type-specific summaries; a single-record lookup returns the complete raw TOML
+structure, including records whose payload schema is not implemented yet. Read
+operations do not load parse content or source files and do not modify the
+workspace.
+
 Tools use explicit `ToolSpec` declarations. Bounded subagents remain a future
 composition point. Persistent sessions, handoffs, ReAct orchestration,
 asynchronous execution, and concrete subagent implementations are not part of
@@ -87,6 +94,10 @@ Future TUI input will keep slash commands such as `/init` and `/check` in a
 deterministic outer command layer. Ordinary natural-language input will be
 forwarded to `MementoAgent.send()`; the Runtime does not depend on terminal
 rendering.
+
+Timeline views are intentionally deferred. Record reads preserve `occurred`
+and `created_at`, while event ordering and fallback behavior remain undefined
+until deterministic date handling is implemented.
 
 ## MinerU Parser Configuration
 

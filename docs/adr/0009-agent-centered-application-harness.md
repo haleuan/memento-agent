@@ -28,6 +28,13 @@ and saving remain deterministic capability operations. The root Agent submits a
 complete confirmed `AchievementItem`; source identity, provenance, evidence, and
 record identity are supplied or validated by application code.
 
+The root Agent also exposes read-only `list_records` and `get_record` tools.
+`list_records` returns generic envelope metadata plus a small projection for
+known record types. `get_record` returns the raw TOML structure so records with
+future or unknown payload schemas remain inspectable without weakening the
+typed loading contract used by known application code. These tools do not read
+parse snapshots or source files and do not mutate the workspace.
+
 The `workflows/` package contains the application harness that composes the
 Agent and its context. Domain operations live under `capabilities/`. A fixed
 `run_achievement_workflow()` entry point is removed so Python does not prescribe
@@ -41,6 +48,8 @@ handlers and forwards ordinary text to `MementoAgent.send()`.
 
 - The Agent can inspect, extract, clarify, save, or stop according to user
   intent.
+- Existing records can be listed and inspected without requiring a second
+  payload schema or a separate read-only Agent.
 - Domain capabilities remain reusable and deterministic without becoming
   specialized Agent classes.
 - The first session implementation is process-local and non-persistent.
@@ -49,3 +58,6 @@ handlers and forwards ordinary text to `MementoAgent.send()`.
   added.
 - TUI rendering, slash command registration, persistent sessions, handoffs,
   subagent orchestration, and asynchronous execution remain future work.
+- Timeline views remain future work. Record summaries preserve `occurred` and
+  `created_at`, but this decision does not define event ordering or fallback
+  behavior when `occurred` is absent.
