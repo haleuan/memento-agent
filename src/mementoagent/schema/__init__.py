@@ -9,6 +9,7 @@ from .envelope import (
     SchemaVersion,
     Verification,
 )
+from .ids import generate_record_id
 from .parsing import ParseSnapshot, ParseSnapshotMetadata
 from .types import PartialDate
 
@@ -21,6 +22,7 @@ __all__ = [
     "AchievementItem",
     "AchievementReference",
     "Evidence",
+    "generate_record_id",
     "HashId",
     "ParseSnapshot",
     "ParseSnapshotMetadata",

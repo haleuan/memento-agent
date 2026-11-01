@@ -49,23 +49,25 @@ class AchievementItem(BaseModel):
             "Full name of the achievement as it appears on the certificate or official record. "
             "Extract this exactly as written in the source document.\n\n"
             "Examples:\n"
-            "- '全国大学生数学建模竞赛'\n"
             "- 'Deep Learning Specialization'\n"
             "- 'Backend Development Internship'\n"
             "- 'Attention Is All You Need' (for a paper)"
         ),
     )
 
-    organization: StrictStr = Field(
+    organization: StrictStr | None = Field(
+        default=None,
         min_length=1,
         description=(
-            "Issuing organization, employer, conference, or host institution.\n\n"
+            "Optional issuing organization, employer, conference, or host institution. "
+            "Leave null when the source does not provide one or it is not useful for the "
+            "achievement context.\n\n"
             "The meaning varies by kind:\n"
             "- award: Awarding body (e.g., 'Education Department', 'Chinese Computer Society')\n"
             "- paper: Journal or conference (e.g., 'NeurIPS 2024', 'Nature')\n"
             "- project: Commissioning organization or academic institution\n"
             "- internship/work: Company name (e.g., 'ByteDance', 'Google')\n"
-            "- certificate: Issuing platform or authority (e.g., 'Coursera', 'AWS', '人力资源和社会保障部')"
+            "- certificate: Issuing platform or authority (e.g., 'Coursera', 'AWS', 'certification authority')"
         ),
     )
 
