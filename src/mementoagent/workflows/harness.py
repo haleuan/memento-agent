@@ -55,13 +55,14 @@ class MementoAgent:
             parser: Parser used when the Agent prepares an inbox source.
             runtime: Runtime used for the conversational Agent and extraction.
         """
-        self._context = MementoContext(
+        context = MementoContext(
             workspace_root=workspace_root,
             parser=parser,
             runtime=runtime,
         )
-        self._toolset = MementoToolset(self._context)
-        self._session = AgentSession(context=self._context)
+        self._runtime = runtime
+        self._toolset = MementoToolset()
+        self._session = AgentSession(context=context)
 
     def tools(self) -> Sequence[ToolSpec[Any]]:
         """Return semantic workspace and achievement tools."""
@@ -86,7 +87,7 @@ class MementoAgent:
         Returns:
             The final Agent response for this turn.
         """
-        return self._context.runtime.run_turn(
+        return self._runtime.run_turn(
             self,
             self._session,
             user_input,

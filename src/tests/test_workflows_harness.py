@@ -13,6 +13,7 @@ from mementoagent.schema import (
 )
 from mementoagent.schema.envelope import TimeRange
 from mementoagent.workflows import MementoAgent
+from mementoagent.workflows.tools import MementoContext, MementoToolset
 from mementoagent.workspace import init_workspace, load_record, save_record
 
 
@@ -92,8 +93,8 @@ def test_prepare_source_rejects_path_traversal(tmp_path: Path) -> None:
         )
 
 
-def test_toolset_uses_bound_context_and_isolated_sessions(tmp_path: Path) -> None:
-    """Bind each toolset to its own Agent context."""
+def test_toolset_uses_runtime_context_and_isolated_sessions(tmp_path: Path) -> None:
+    """Use the context supplied by the Runtime for each tool invocation."""
     first_root = init_workspace(tmp_path / "first")
     second_root = init_workspace(tmp_path / "second")
     (first_root / "inbox" / "first.pdf").write_bytes(b"first")
@@ -101,18 +102,27 @@ def test_toolset_uses_bound_context_and_isolated_sessions(tmp_path: Path) -> Non
 
     first_agent = MementoAgent(first_root, FakeParser(), FakeRuntime())  # type: ignore[arg-type]
     second_agent = MementoAgent(second_root, FakeParser(), FakeRuntime())  # type: ignore[arg-type]
-    first_list = get_tool(first_agent, "list_inbox")
-    second_list = get_tool(second_agent, "list_inbox")
+    first_context = first_agent._session.context  # type: ignore[attr-defined]
+    second_context = second_agent._session.context  # type: ignore[attr-defined]
+    assert isinstance(first_context, MementoContext)
+    assert isinstance(second_context, MementoContext)
+    assert first_context is not second_context
+    list_tool = next(
+        tool for tool in MementoToolset().specs() if tool.name == "list_inbox"
+    )
 
-    assert first_agent._toolset is not second_agent._toolset  # type: ignore[attr-defined]
-    assert first_list.handler(
-        first_list.parameters(),
-        second_agent._session.context,  # type: ignore[attr-defined]
-    ) == ["first.pdf"]
-    assert second_list.handler(
-        second_list.parameters(),
-        first_agent._session.context,  # type: ignore[attr-defined]
-    ) == ["second.pdf"]
+    assert list_tool.handler(list_tool.parameters(), first_context) == ["first.pdf"]
+    assert list_tool.handler(list_tool.parameters(), second_context) == ["second.pdf"]
+
+
+def test_toolset_rejects_missing_runtime_context() -> None:
+    """Require the Memento session context at the tool boundary."""
+    list_tool = next(
+        tool for tool in MementoToolset().specs() if tool.name == "list_inbox"
+    )
+
+    with pytest.raises(TypeError, match="MementoContext"):
+        list_tool.handler(list_tool.parameters(), None)
 
 
 def test_list_records_returns_empty_list_for_new_workspace(tmp_path: Path) -> None:
