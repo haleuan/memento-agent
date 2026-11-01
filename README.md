@@ -21,7 +21,7 @@ Snapshot metadata and records are structured TOML. `content.md` preserves the pa
 
 ## Achievement Extraction
 
-The achievement workflow runs a declared extraction task through the project's local Agent Runtime. It reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Event dates are not included yet because date interpretation belongs in deterministic code. The workflow does not create or save a record; approval and record materialization are separate steps.
+The achievement workflow runs a declared extraction task through the project's local Agent Runtime. It reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Organization is optional because some credentials do not need a useful issuer value. Event dates are not included yet because date interpretation belongs in deterministic code.
 
 ## Agent Runtime
 
@@ -41,7 +41,13 @@ with AgentRuntime(model=model, api_key=api_key) as runtime:
 
 ## Achievement Draft Review
 
-The achievement review workflow gives the model a structured draft containing the extracted facts, source identifier, and any description suggestion. The model must use the `ask_user` tool to generate the opening summary and review prompt, then can ask focused follow-up questions when the reply is ambiguous. It accepts natural-language confirmation, field corrections, description edits, or rejection. The workflow returns a structured `AchievementReviewDecision`; deterministic review logic applies it and returns an in-memory reviewed draft while preserving the original extracted draft. User corrections and description text remain separate from source-supported facts. This step does not create or save a record, and it is a conversation boundary rather than a CLI or UI workflow.
+The achievement review workflow gives the model a structured draft containing the extracted facts, source identifier, and any description suggestion. The model must use the `ask_user` tool to generate the opening summary and review prompt, then can ask focused follow-up questions when the reply is ambiguous. It accepts natural-language confirmation, field corrections, description edits, or rejection. The workflow returns a structured `AchievementReviewDecision`; deterministic review logic applies it and returns an in-memory reviewed draft while preserving the original extracted draft. User corrections and description text remain separate from source-supported facts during review. This step does not create or save a record, and it is a conversation boundary rather than a CLI or UI workflow.
+
+## Achievement Record Materialization
+
+An approved reviewed draft can be converted to a `RecordEnvelope[AchievementItem]` by the deterministic `materialize_achievement()` workflow. The converter preserves the record-level `document` provenance and adds one source-level evidence item containing the original source hash. It leaves `evidence.supports` empty because the current contract does not claim field-level quote or page grounding. OCR corrections remain corrections to source-derived facts; they do not change the record provenance. A user-approved description is copied into `data.description` during materialization, while organization may remain absent when the source does not provide a useful issuer.
+
+Materialization does not parse dates, validate or save workspace files, or create interactive prompts. Callers pass the resulting record through the existing `validate_record()` and `save_record()` functions. Occurrence dates, page/quote evidence, and finer-grained claim provenance remain future work.
 
 ## MinerU Parser Configuration
 
