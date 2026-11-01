@@ -65,16 +65,25 @@ comment should be brief and reference the relevant debt ID.
 ## TD-006: Review and Materialize Achievement Drafts
 
 - **Status**: `accepted`
-- **Location**: `src/mementoagent/agents/extraction.py` and `src/mementoagent/agents/review.py`
-- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional description suggestion. `AchievementReviewAgent` now starts a bounded natural-language review conversation, asks for clarification when needed, and produces a structured decision. The deterministic review function preserves original and reviewed values, but the flow still does not include occurrence dates, create a `RecordEnvelope`, generate record metadata, write evidence, or save a TOML record. Reviewed data therefore still needs a separate materialization path before entering the workspace.
+- **Location**: `src/mementoagent/workflows/achievement/`
+- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional description suggestion. The achievement review workflow starts a bounded natural-language review conversation, asks for clarification when needed, and produces a structured decision. The deterministic review function preserves original and reviewed values, but the flow still does not include occurrence dates, create a `RecordEnvelope`, generate record metadata, write evidence, or save a TOML record. Reviewed data therefore still needs a separate materialization path before entering the workspace.
 - **Reason deferred**: Conversational interpretation and deterministic application are now isolated from persistence. Date interpretation must remain deterministic, and draft-to-record conversion, provenance for user corrections, evidence generation, and saving need their own explicit contract.
 - **Review trigger**: Before a user-facing workflow needs to date or persist an approved reviewed achievement.
 - **Completion criteria**: Raw date text is passed through a deterministic parser into `PartialDate`; a deterministic draft-to-record conversion distinguishes source-supported values from user corrections, creates envelope metadata and source-level evidence, and persists only an approved record, with tests.
 
+## TD-011: General Workflow Orchestration
+
+- **Status**: `accepted`
+- **Location**: `src/mementoagent/workflows/` and `src/mementoagent/agents/`
+- **Current state and impact**: The generic Runtime executes declarative task specifications, while achievement extraction and review live in a workflow package. There is no general workflow coordinator for composing multiple domain tasks, managing shared user conversations, or materializing results across record types.
+- **Reason deferred**: Only the achievement workflow currently exists. A coordinator abstraction would be speculative until a second domain workflow demonstrates shared sequencing or state requirements.
+- **Review trigger**: When a second domain workflow needs to compose extraction, user review, provenance handling, or record materialization with the achievement workflow.
+- **Completion criteria**: A workflow coordinator has an explicit input, state, error, and ownership contract; generic Runtime code remains independent of workflow modules; and at least two workflows exercise the shared orchestration through offline tests.
+
 ## TD-007: Expand the Agent Runtime Beyond One Structured Turn
 
 - **Status**: `accepted`
-- **Location**: `src/mementoagent/agents/base.py`, `src/mementoagent/agents/runtime.py`, and `src/mementoagent/agents/tools.py`
+- **Location**: `src/mementoagent/agents/task.py`, `src/mementoagent/agents/runtime.py`, and `src/mementoagent/agents/tools.py`
 - **Current state and impact**: The project-owned Runtime uses the OpenAI Python SDK for Pydantic schema adaptation and structured response parsing, while owning the synchronous Responses request loop, in-memory state, and bounded function-tool execution. Subagent tools accept string input, but no concrete subagent workflow exists. It does not persist sessions, resume interrupted runs, compress long contexts, perform handoffs, expose production observability, or define shared execution budgets for nested runs.
 - **Reason deferred**: The current extraction task only needs a bounded synchronous run. Durable state, richer context management, handoffs, and asynchronous execution would enlarge the runtime contract before a concrete workflow requires them.
 - **Review trigger**: When a task needs a real subagent, multi-turn conversation state, human interruption/resume, long-context management, handoff ownership, asynchronous execution, or production run observability.

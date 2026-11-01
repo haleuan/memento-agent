@@ -19,10 +19,10 @@ document-supported values separate from user corrections.
 
 ## Decision
 
-The review boundary has two parts. `AchievementReviewAgent` supplies the model
-with a structured draft containing the facts, source identifier, and optional
-description suggestion. The model must make the first `ask_user` call and
-generate the opening summary, explanation, and review prompt. It accepts a
+The review boundary has two parts. The achievement review workflow supplies the
+model with a structured draft containing the facts, source identifier, and
+optional description suggestion. The model must make the first `ask_user` call
+and generate the opening summary, explanation, and review prompt. It accepts a
 natural-language reply through the injected `ask_user` callback and may ask
 focused follow-up questions when the reply is ambiguous. It returns a
 structured `AchievementReviewDecision`. The deterministic

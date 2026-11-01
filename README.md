@@ -21,26 +21,27 @@ Snapshot metadata and records are structured TOML. `content.md` preserves the pa
 
 ## Achievement Extraction
 
-`AchievementExtractor` runs as the first task through the project's local Agent Runtime. It reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Event dates are not included yet because date interpretation belongs in deterministic code. The extractor does not create or save a record; approval and record materialization are separate steps.
+The achievement workflow runs a declared extraction task through the project's local Agent Runtime. It reads a `ParseSnapshot` and returns an in-memory structured achievement draft. Document-supported facts are validated with the `AchievementItem` schema, and the source hash comes from snapshot metadata. The draft may also contain one optional `description_suggestion` with candidate text and a rationale. This is an unconfirmed proposal, separate from `data.description`; it must not invent personal responsibilities, impact, or metrics. Event dates are not included yet because date interpretation belongs in deterministic code. The workflow does not create or save a record; approval and record materialization are separate steps.
 
 ## Agent Runtime
 
-The project uses the official OpenAI Python SDK behind a small local Runtime. A task Agent declares its instructions, structured output type, input conversion, and optional tools or subagents. The SDK adapts Pydantic schemas and parses structured responses; the Runtime owns the synchronous request loop, in-memory run state, tool dispatch, execution limits, and error boundaries. It returns only the task's typed output and does not expose SDK response objects, usage, or credentials to domain code.
+The project uses the official OpenAI Python SDK behind a small local Runtime. A generic `TaskSpec` declares instructions, structured output type, input conversion, and optional tools or subagents. The SDK adapts Pydantic schemas and parses structured responses; the Runtime owns the synchronous request loop, in-memory run state, tool dispatch, execution limits, and error boundaries. It returns only the task's typed output and does not expose SDK response objects, usage, or credentials to workflow code.
 
 Tools use explicit `ToolSpec` declarations. A manager can compose future bounded subagents as internal tools, while the manager retains control of the conversation. Session persistence, handoffs, ReAct orchestration, asynchronous execution, and concrete subagent implementations are not part of the current implementation.
 
 Use `AgentRuntime` as a context manager when it creates its own OpenAI client:
 
 ```python
-from mementoagent.agents import AchievementExtractor, AgentRuntime
+from mementoagent.agents import AgentRuntime
+from mementoagent.workflows.achievement import extract_achievement
 
 with AgentRuntime(model=model, api_key=api_key) as runtime:
-    draft = AchievementExtractor(runtime).extract(snapshot)
+    draft = extract_achievement(runtime, snapshot)
 ```
 
 ## Achievement Draft Review
 
-`AchievementReviewAgent` gives the model a structured draft containing the extracted facts, source identifier, and any description suggestion. The model must use the `ask_user` tool to generate the opening summary and review prompt, then can ask focused follow-up questions when the reply is ambiguous. It accepts natural-language confirmation, field corrections, description edits, or rejection. The Agent returns a structured `AchievementReviewDecision`; the deterministic review function applies it and returns an in-memory reviewed draft while preserving the original extracted draft. User corrections and description text remain separate from source-supported facts. This step does not create or save a record, and it is a conversation boundary rather than a CLI or UI workflow.
+The achievement review workflow gives the model a structured draft containing the extracted facts, source identifier, and any description suggestion. The model must use the `ask_user` tool to generate the opening summary and review prompt, then can ask focused follow-up questions when the reply is ambiguous. It accepts natural-language confirmation, field corrections, description edits, or rejection. The workflow returns a structured `AchievementReviewDecision`; deterministic review logic applies it and returns an in-memory reviewed draft while preserving the original extracted draft. User corrections and description text remain separate from source-supported facts. This step does not create or save a record, and it is a conversation boundary rather than a CLI or UI workflow.
 
 ## MinerU Parser Configuration
 

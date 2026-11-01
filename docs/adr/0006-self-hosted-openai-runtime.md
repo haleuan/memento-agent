@@ -21,8 +21,9 @@ handoffs, ReAct orchestration, durable state, or asynchronous execution.
 Use the official `openai` Python SDK for transport and Responses API types, and
 keep the Agent runtime in Memento. The runtime owns the following boundaries:
 
-- `BaseAgent` declares task instructions, input conversion, output type, and
-  optional tools or composable subagents.
+- `AgentTask` defines the protocol consumed by the Runtime. `TaskSpec` provides
+  an immutable declarative implementation for task instructions, input
+  conversion, output type, and optional tools or composable subagents.
 - `ToolSpec` explicitly declares a tool name, description, Pydantic argument
   model, and callable handler.
 - `AgentRuntime` creates or accepts an OpenAI client and owns the Responses
@@ -54,6 +55,10 @@ subagent implementations are deferred until a real task requires them.
   asynchronous execution, or production trace/usage observability.
 - Future runtime changes must preserve source provenance boundaries and must
   add an explicit state and failure contract before expanding execution scope.
+
+Task-specific declarations and user-facing orchestration belong outside the
+generic `agents` package. Achievement extraction and review are workflow code;
+the Runtime must not import those workflows.
 
 ## Rejected alternative
 
