@@ -66,10 +66,10 @@ comment should be brief and reference the relevant debt ID.
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/workflows/achievement/`
-- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional description suggestion. The achievement review workflow starts a bounded natural-language review conversation, asks for clarification when needed, and produces a structured decision. The deterministic review function preserves original and reviewed values, but the flow still does not include occurrence dates, create a `RecordEnvelope`, generate record metadata, write evidence, or save a TOML record. Reviewed data therefore still needs a separate materialization path before entering the workspace.
-- **Reason deferred**: Conversational interpretation and deterministic application are now isolated from persistence. Date interpretation must remain deterministic, and draft-to-record conversion, provenance for user corrections, evidence generation, and saving need their own explicit contract.
-- **Review trigger**: Before a user-facing workflow needs to date or persist an approved reviewed achievement.
-- **Completion criteria**: Raw date text is passed through a deterministic parser into `PartialDate`; a deterministic draft-to-record conversion distinguishes source-supported values from user corrections, creates envelope metadata and source-level evidence, and persists only an approved record, with tests.
+- **Current state and impact**: Achievement extraction returns an in-memory draft with source provenance and an optional description suggestion. The achievement review workflow starts a bounded natural-language review conversation, asks for clarification when needed, and produces a structured decision. Approved drafts now materialize deterministically into `RecordEnvelope[AchievementItem]` values with generated identity, accepted descriptions, record-level `document` provenance, and source-only evidence; callers reuse existing validation and TOML persistence.
+- **Reason deferred**: The first materialization contract intentionally stops at source-level traceability. Date interpretation, field-level provenance, page/quote grounding, and detailed source claim mapping need separate contracts and real consumers.
+- **Review trigger**: When a user-facing workflow needs occurrence dates, page/quote evidence, or different provenance semantics for user-authored facts.
+- **Completion criteria**: A deterministic date parser produces `PartialDate`; evidence can identify supported claims at the required precision; and provenance semantics distinguish source facts, OCR corrections, and user additions without weakening source traceability.
 
 ## TD-011: General Workflow Orchestration
 
