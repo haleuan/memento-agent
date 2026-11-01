@@ -11,16 +11,18 @@ from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, StrictInt
 
 from mementoagent.agents import (
-    AchievementDraft,
-    AchievementExtraction,
-    AchievementExtractor,
     AgentRuntime,
     AgentRuntimeError,
-    BaseAgent,
+    TaskSpec,
     ToolSpec,
 )
 from mementoagent.agents import runtime as runtime_module
 from mementoagent.schema import AchievementItem, ParseSnapshot, ParseSnapshotMetadata
+from mementoagent.workflows.achievement import (
+    AchievementDraft,
+    AchievementExtraction,
+    extract_achievement,
+)
 
 
 class Output(BaseModel):
@@ -40,47 +42,62 @@ class AddArguments(BaseModel):
     increment: StrictInt | None = None
 
 
-class Task(BaseAgent[str, Output]):
-    """Minimal structured task."""
-
-    name = "task"
-    description = "A test task"
-    instructions = "Return the supplied value."
-    output_type = Output
-
-    def build_input(self, value: str) -> str:
-        """Build the test input."""
-        return value
+def _identity(value: str) -> str:
+    return value
 
 
-class ToolTask(Task):
-    """Task exposing one explicit function tool."""
+def make_task(*, model: str | None = None) -> TaskSpec[str, Output]:
+    """Build a minimal structured task."""
+    return TaskSpec(
+        name="task",
+        description="A test task",
+        instructions="Return the supplied value.",
+        output_type=Output,
+        input_builder=_identity,
+        model=model,
+    )
 
-    def tools(self) -> tuple[ToolSpec[AddArguments], ...]:
-        """Return the test tool."""
-        return (
+
+def make_tool_task() -> TaskSpec[str, Output]:
+    """Build a task exposing one explicit function tool."""
+    return TaskSpec(
+        name="tool_task",
+        description="A task with a tool.",
+        instructions="Return the supplied value.",
+        output_type=Output,
+        input_builder=_identity,
+        tool_builder=lambda: (
             ToolSpec(
                 name="add_value",
                 description="Add one value.",
                 parameters=AddArguments,
                 handler=lambda arguments, _context: arguments.value + 1,
             ),
-        )
+        ),
+    )
 
 
-class Specialist(Task):
-    """Specialist task used to verify subagent composition."""
+def make_specialist() -> TaskSpec[str, Output]:
+    """Build a specialist task used to verify subagent composition."""
+    return TaskSpec(
+        name="specialist",
+        description="Run the specialist task.",
+        instructions="Return the supplied value.",
+        output_type=Output,
+        input_builder=_identity,
+    )
 
-    name = "specialist"
-    description = "Run the specialist task."
 
-
-class Manager(Task):
-    """Manager task exposing a specialist as an internal tool."""
-
-    def subagents(self) -> tuple[Specialist, ...]:
-        """Return the specialist task."""
-        return (Specialist(),)
+def make_manager() -> TaskSpec[str, Output]:
+    """Build a manager task exposing a specialist as an internal tool."""
+    return TaskSpec(
+        name="manager",
+        description="Run the manager task.",
+        instructions="Return the supplied value.",
+        output_type=Output,
+        input_builder=_identity,
+        subagent_builder=lambda: (make_specialist(),),
+    )
 
 
 ClientFactory = Callable[
@@ -182,12 +199,13 @@ def test_runtime_returns_structured_output_and_request_contract(client_factory) 
     """Pass task fields to the real SDK and return only the typed output."""
     client, requests = client_factory([final("ok")])
 
-    result = AgentRuntime("test-model", client=client).run(Task(), "document text")
+    task = make_task()
+    result = AgentRuntime("test-model", client=client).run(task, "document text")
 
     assert result == Output(value="ok")
     request = requests[0]
     assert request["model"] == "test-model"
-    assert request["instructions"] == Task.instructions
+    assert request["instructions"] == task.instructions
     assert request["input"] == [{"role": "user", "content": "document text"}]
     assert "tools" not in request
     assert request["text"]["format"]["type"] == "json_schema"
@@ -205,8 +223,8 @@ def test_runtime_adapts_real_achievement_schema_and_injects_source(
     extraction = AchievementExtraction(
         data=AchievementItem(
             kind="award",
-            title="研究生学业奖学金",
-            organization="重庆师范大学",
+            title="Graduate Scholarship",
+            organization="Example University",
             references=[{"type": "certificate_id", "url": "C-001"}],
         )
     )
@@ -220,12 +238,10 @@ def test_runtime_adapts_real_achievement_schema_and_injects_source(
             parser_version="1",
             created_at="2025-01-12T09:30:00+08:00",
         ),
-        content="证书标题\n重庆师范大学\n",
+        content="Certificate title\nExample University\n",
     )
 
-    result = AchievementExtractor(AgentRuntime("test-model", client=client)).extract(
-        snapshot
-    )
+    result = extract_achievement(AgentRuntime("test-model", client=client), snapshot)
 
     assert result == AchievementDraft(
         data=extraction.data, source=snapshot.metadata.source
@@ -240,12 +256,10 @@ def test_runtime_adapts_real_achievement_schema_and_injects_source(
 
 def test_runtime_uses_agent_model_override(client_factory) -> None:
     """Use a task model override when it is declared."""
-
-    class ModelTask(Task):
-        model = "task-model"
-
     client, requests = client_factory([final("ok")])
-    AgentRuntime("default-model", client=client).run(ModelTask(), "input")
+    AgentRuntime("default-model", client=client).run(
+        make_task(model="task-model"), "input"
+    )
     assert requests[0]["model"] == "task-model"
 
 
@@ -254,7 +268,7 @@ def test_runtime_default_is_one_model_request(client_factory) -> None:
     client, requests = client_factory([response(tool_call())])
 
     with pytest.raises(AgentRuntimeError, match="final output"):
-        AgentRuntime("test-model", client=client).run(ToolTask(), "input")
+        AgentRuntime("test-model", client=client).run(make_tool_task(), "input")
 
     assert len(requests) == 1
 
@@ -282,7 +296,7 @@ def test_runtime_replays_sdk_items_without_local_parsed_fields(client_factory) -
     )
 
     result = AgentRuntime("test-model", client=client, max_turns=2).run(
-        ToolTask(), "input"
+        make_tool_task(), "input"
     )
 
     assert result == Output(value="three")
@@ -320,7 +334,7 @@ def test_runtime_composes_subagent_as_internal_tool(client_factory) -> None:
     )
 
     result = AgentRuntime("test-model", client=client, max_turns=2).run(
-        Manager(), "parent"
+        make_manager(), "parent"
     )
 
     assert result == Output(value="manager result")
@@ -337,7 +351,9 @@ def test_runtime_rejects_invalid_subagent_arguments(client_factory, arguments) -
         [response(tool_call(name="specialist", arguments=arguments))]
     )
     with pytest.raises(AgentRuntimeError):
-        AgentRuntime("test-model", client=client, max_turns=2).run(Manager(), "parent")
+        AgentRuntime("test-model", client=client, max_turns=2).run(
+            make_manager(), "parent"
+        )
 
 
 def test_runtime_passes_context_and_executes_calls_in_order(client_factory) -> None:
@@ -348,9 +364,16 @@ def test_runtime_passes_context_and_executes_calls_in_order(client_factory) -> N
         seen.append((arguments.value, context))
         return arguments.value
 
-    class ContextTask(Task):
-        def tools(self) -> tuple[ToolSpec[AddArguments], ...]:
-            return (ToolSpec("add_value", "Return a value.", AddArguments, handler),)
+    context_task = TaskSpec(
+        name="context_task",
+        description="A context task.",
+        instructions="Return the supplied value.",
+        output_type=Output,
+        input_builder=_identity,
+        tool_builder=lambda: (
+            ToolSpec("add_value", "Return a value.", AddArguments, handler),
+        ),
+    )
 
     context = object()
     client, requests = client_factory(
@@ -364,7 +387,7 @@ def test_runtime_passes_context_and_executes_calls_in_order(client_factory) -> N
     )
 
     AgentRuntime("test-model", client=client, max_turns=2).run(
-        ContextTask(), "input", context=context
+        context_task, "input", context=context
     )
 
     assert seen == [(1, context), (2, context)]
@@ -379,7 +402,7 @@ def test_runtime_rejects_missing_or_invalid_output(client_factory, payload) -> N
     """Reject responses without a validated structured result."""
     client, _ = client_factory([payload])
     with pytest.raises(AgentRuntimeError):
-        AgentRuntime("test-model", client=client).run(Task(), "input")
+        AgentRuntime("test-model", client=client).run(make_task(), "input")
 
 
 def test_runtime_wraps_model_errors_without_leaking_details(client_factory) -> None:
@@ -387,7 +410,7 @@ def test_runtime_wraps_model_errors_without_leaking_details(client_factory) -> N
     client, _ = client_factory([RuntimeError("test-key and private document")])
 
     with pytest.raises(AgentRuntimeError, match="model request failed") as error:
-        AgentRuntime("test-model", client=client).run(Task(), "private document")
+        AgentRuntime("test-model", client=client).run(make_task(), "private document")
 
     assert "test-key" not in str(error.value)
     assert "private document" not in str(error.value)
@@ -406,7 +429,9 @@ def test_runtime_rejects_invalid_tool_calls(client_factory, name, arguments) -> 
     """Unify unknown tools and invalid arguments under the runtime error."""
     client, _ = client_factory([response(tool_call(name=name, arguments=arguments))])
     with pytest.raises(AgentRuntimeError):
-        AgentRuntime("test-model", client=client, max_turns=2).run(ToolTask(), "input")
+        AgentRuntime("test-model", client=client, max_turns=2).run(
+            make_tool_task(), "input"
+        )
 
 
 @pytest.mark.parametrize("unserializable", [False, True])
@@ -420,14 +445,19 @@ def test_runtime_rejects_tool_handler_or_encoding_errors(
             return object()
         raise RuntimeError("private failure")
 
-    class FailingTask(Task):
-        def tools(self) -> tuple[ToolSpec[AddArguments], ...]:
-            return (ToolSpec("add_value", "Fail.", AddArguments, handler),)
+    failing_task = TaskSpec(
+        name="failing_task",
+        description="A failing task.",
+        instructions="Return the supplied value.",
+        output_type=Output,
+        input_builder=_identity,
+        tool_builder=lambda: (ToolSpec("add_value", "Fail.", AddArguments, handler),),
+    )
 
     client, _ = client_factory([response(tool_call())])
     with pytest.raises(AgentRuntimeError, match="tool execution failed") as error:
         AgentRuntime("test-model", client=client, max_turns=2).run(
-            FailingTask(), "input"
+            failing_task, "input"
         )
     assert "private failure" not in str(error.value)
 
@@ -439,7 +469,7 @@ def test_runtime_enforces_tool_call_limit(client_factory) -> None:
     )
     with pytest.raises(AgentRuntimeError, match="tool call limit"):
         AgentRuntime("test-model", client=client, max_turns=2, max_tool_calls=1).run(
-            ToolTask(), "input"
+            make_tool_task(), "input"
         )
     assert len(requests) == 1
 
@@ -451,19 +481,18 @@ def test_runtime_supports_different_input_and_output_types(client_factory) -> No
         model_config = ConfigDict(extra="forbid")
         count: int
 
-    class CountTask(BaseAgent[int, Count]):
-        name = "count"
-        description = "Count a value."
-        instructions = "Return the count."
-        output_type = Count
-
-        def build_input(self, value: int) -> str:
-            return str(value)
+    count_task = TaskSpec(
+        name="count",
+        description="Count a value.",
+        instructions="Return the count.",
+        output_type=Count,
+        input_builder=str,
+    )
 
     client, requests = client_factory([final("ok"), response(message('{"count":2}'))])
     runtime = AgentRuntime("test-model", client=client)
-    assert runtime.run(Task(), "input") == Output(value="ok")
-    assert runtime.run(CountTask(), 2) == Count(count=2)
+    assert runtime.run(make_task(), "input") == Output(value="ok")
+    assert runtime.run(count_task, 2) == Count(count=2)
     assert requests[1]["text"]["format"]["name"] == "Count"
     assert requests[1]["input"][0]["content"] == "2"
 
@@ -485,7 +514,7 @@ def test_runtime_closes_owned_client_on_context_exit(
         with AgentRuntime(
             "test-model", api_key="test-key", base_url="https://private.example/v1"
         ) as runtime:
-            assert runtime.run(Task(), "input") == Output(value="ok")
+            assert runtime.run(make_task(), "input") == Output(value="ok")
             assert not client.is_closed()
             if fails:
                 raise ValueError("scope failed")
@@ -501,8 +530,8 @@ def test_runtime_leaves_injected_client_with_caller(client_factory, fails) -> No
     client, requests = client_factory([final("first"), final("second")])
     with pytest.raises(ValueError) if fails else nullcontext():
         with AgentRuntime("test-model", client=client) as runtime:
-            assert runtime.run(Task(), "one") == Output(value="first")
-            assert runtime.run(Task(), "two") == Output(value="second")
+            assert runtime.run(make_task(), "one") == Output(value="first")
+            assert runtime.run(make_task(), "two") == Output(value="second")
             if fails:
                 raise ValueError("scope failed")
     runtime.close()

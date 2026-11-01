@@ -5,24 +5,26 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from mementoagent.agents import (
-    AchievementDraft,
-    AchievementExtraction,
-    AchievementExtractionError,
-    AchievementExtractor,
-    DescriptionSuggestion,
-)
 from mementoagent.agents.runtime import AgentRuntimeError
 from mementoagent.schema import (
     AchievementItem,
     ParseSnapshot,
     ParseSnapshotMetadata,
 )
+from mementoagent.workflows.achievement import (
+    AchievementDraft,
+    AchievementExtraction,
+    AchievementExtractionError,
+    DescriptionSuggestion,
+    extract_achievement,
+)
 
 SOURCE = "sha256:" + "a" * 64
 
 
-def make_snapshot(content: str = "证书标题\n重庆师范大学\n") -> ParseSnapshot:
+def make_snapshot(
+    content: str = "Certificate title\nExample University\n",
+) -> ParseSnapshot:
     """Build a parse snapshot for an extraction test."""
     return ParseSnapshot(
         metadata=ParseSnapshotMetadata(
@@ -65,8 +67,8 @@ def make_extraction(
     return AchievementExtraction(
         data=AchievementItem(
             kind="award",
-            title="研究生学业奖学金",
-            organization="重庆师范大学",
+            title="Graduate Scholarship",
+            organization="Example University",
             **data,
         ),
         description_suggestion=description_suggestion,
@@ -75,45 +77,47 @@ def make_extraction(
 
 def test_extractor_returns_draft_and_injects_source() -> None:
     """Copy structured data and source identity into an in-memory draft."""
-    extraction = make_extraction(level_raw="一等奖", certificate_number="202412055458")
+    extraction = make_extraction(
+        level_raw="First Prize", certificate_number="202412055458"
+    )
     runtime = FakeRuntime(extraction)
 
-    extractor = AchievementExtractor(runtime)  # type: ignore[arg-type]
-    result = extractor.extract(make_snapshot("标题\n机构\n等级\n编号\n"))
+    result = extract_achievement(
+        runtime, make_snapshot("Title\nIssuer\nLevel\nNumber\n")
+    )
 
     assert result == AchievementDraft(data=extraction.data, source=SOURCE)
     assert result.data.description is None
-    assert runtime.agent is extractor
-    assert runtime.value.content == "标题\n机构\n等级\n编号\n"
-    assert "Do not infer" in extractor.instructions
+    assert runtime.agent.name == "achievement_extraction"
+    assert runtime.value.content == "Title\nIssuer\nLevel\nNumber\n"
+    assert "Do not infer" in runtime.agent.instructions
 
 
 def test_extractor_keeps_description_suggestion_separate() -> None:
     """Return a candidate description without treating it as extracted data."""
     suggestion = DescriptionSuggestion(
-        text="获得重庆师范大学研究生学业奖学金一等奖。",
-        rationale="该表述只复述证书明确记载的奖项和等级。",
+        text="Received the Graduate Scholarship First Prize at Example University.",
+        rationale="Restates only the award and level documented in the certificate.",
     )
     extraction = make_extraction(
         description_suggestion=suggestion,
-        level_raw="一等奖",
+        level_raw="First Prize",
     )
     runtime = FakeRuntime(extraction)
 
-    extractor = AchievementExtractor(runtime)  # type: ignore[arg-type]
-    result = extractor.extract(make_snapshot())
+    result = extract_achievement(runtime, make_snapshot())
 
     assert result.description_suggestion == suggestion
     assert result.data.description is None
-    assert "description_suggestion" in extractor.instructions
-    assert "Do not invent personal responsibilities" in extractor.instructions
+    assert "description_suggestion" in runtime.agent.instructions
+    assert "Do not invent personal responsibilities" in runtime.agent.instructions
 
 
 def test_extractor_preserves_optional_unknown_fields_as_none() -> None:
     """Keep fields absent from the structured response unset."""
     runtime = FakeRuntime(make_extraction())
 
-    result = AchievementExtractor(runtime).extract(make_snapshot())  # type: ignore[arg-type]
+    result = extract_achievement(runtime, make_snapshot())
 
     assert result.data.level_raw is None
     assert result.data.certificate_number is None
@@ -131,7 +135,7 @@ def test_extractor_rejects_missing_structured_output() -> None:
         AchievementExtractionError,
         match="no structured achievement",
     ):
-        AchievementExtractor(runtime).extract(make_snapshot())  # type: ignore[arg-type]
+        extract_achievement(runtime, make_snapshot())
 
 
 def test_extractor_rejects_user_description() -> None:
@@ -140,9 +144,9 @@ def test_extractor_rejects_user_description() -> None:
         AchievementExtraction(
             data=AchievementItem(
                 kind="award",
-                title="奖项",
-                organization="机构",
-                description="模型生成的描述",
+                title="Award",
+                organization="Institution",
+                description="Model-generated description",
             )
         )
 
@@ -157,13 +161,13 @@ def test_extractor_rejects_invalid_structured_output() -> None:
         AchievementExtractionError,
         match="invalid achievement",
     ):
-        AchievementExtractor(runtime).extract(make_snapshot())  # type: ignore[arg-type]
+        extract_achievement(runtime, make_snapshot())
 
 
 def test_extractor_does_not_write_files(tmp_path) -> None:
     """Extraction is in-memory and does not create workspace artifacts."""
     runtime = FakeRuntime(make_extraction())
 
-    AchievementExtractor(runtime).extract(make_snapshot())  # type: ignore[arg-type]
+    extract_achievement(runtime, make_snapshot())
 
     assert list(tmp_path.iterdir()) == []
