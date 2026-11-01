@@ -17,7 +17,7 @@ from openai.types.responses import (
 from openai.types.responses.response_input_param import FunctionCallOutput
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from .base import BaseAgent, InputT, OutputT
+from .task import AgentTask, InputT, OutputT
 from .tools import ToolSpec
 
 
@@ -96,7 +96,7 @@ class AgentRuntime:
 
     def run(
         self,
-        agent: BaseAgent[InputT, OutputT],
+        agent: AgentTask[InputT, OutputT],
         value: InputT,
         *,
         context: object | None = None,
@@ -161,7 +161,7 @@ class AgentRuntime:
 
         raise AgentRuntimeError("model did not return final output")
 
-    def _collect_tools(self, agent: BaseAgent[Any, Any]) -> list[ToolSpec[Any]]:
+    def _collect_tools(self, agent: AgentTask[Any, Any]) -> list[ToolSpec[Any]]:
         tools = list(agent.tools())
         for subagent in agent.subagents():
             tools.append(self._subagent_tool(subagent))
@@ -171,7 +171,7 @@ class AgentRuntime:
         return tools
 
     def _subagent_tool(
-        self, agent: BaseAgent[str, Any]
+        self, agent: AgentTask[str, Any]
     ) -> ToolSpec[_SubagentArguments]:
         def run_subagent(
             arguments: _SubagentArguments, context: object | None
