@@ -96,7 +96,9 @@ def test_runtime_accepts_a_structurally_compatible_task() -> None:
     task: AgentTask[str, Output] = StructuralTask()
     with httpx.Client(transport=httpx.MockTransport(handle)) as http_client:
         with OpenAI(api_key="test-key", http_client=http_client) as client:
-            result = AgentRuntime("test-model", client=client).run(task, "input")
+            result = AgentRuntime("test-model", client=client).run_structured_task(
+                task, "input"
+            )
 
     assert result == Output(value="result")
     assert requests[0]["instructions"] == task.instructions
@@ -108,6 +110,7 @@ def test_agents_exports_only_generic_interfaces() -> None:
     assert set(agents.__all__) == {
         "AgentRuntime",
         "AgentRuntimeError",
+        "AgentStructuredOutputError",
         "AgentDefinition",
         "AgentEvent",
         "AgentSession",

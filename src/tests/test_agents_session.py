@@ -132,10 +132,10 @@ def test_run_turn_replays_history_and_emits_safe_events() -> None:
     session = AgentSession()
     runtime = AgentRuntime("test-model", client=client)
 
-    first = runtime.run_turn(
+    first = runtime.run_conversation_turn(
         ConversationAgent(), session, "hello", on_event=events.append
     )
-    second = runtime.run_turn(
+    second = runtime.run_conversation_turn(
         ConversationAgent(), session, "continue", on_event=events.append
     )
 
@@ -167,7 +167,7 @@ def test_run_turn_executes_tool_and_returns_final_text() -> None:
 
     events: list[AgentEvent] = []
     runtime = AgentRuntime("test-model", client=client)
-    result = runtime.run_turn(
+    result = runtime.run_conversation_turn(
         ConversationAgent(handler),
         AgentSession(),
         "use the tool",
@@ -202,7 +202,7 @@ def test_run_turn_sanitizes_tool_failures() -> None:
     def handler(_arguments: EchoArguments, _context: object | None) -> str:
         raise RuntimeError("private document and test-key")
 
-    result = AgentRuntime("test-model", client=client).run_turn(
+    result = AgentRuntime("test-model", client=client).run_conversation_turn(
         ConversationAgent(handler), AgentSession(), "use the tool"
     )
 
@@ -218,7 +218,7 @@ def test_run_turn_enforces_agent_limits() -> None:
     agent.max_turns = 1
 
     with pytest.raises(AgentRuntimeError, match="final output"):
-        AgentRuntime("test-model", client=client).run_turn(
+        AgentRuntime("test-model", client=client).run_conversation_turn(
             agent, AgentSession(), "use the tool"
         )
     client.close()

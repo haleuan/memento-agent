@@ -32,7 +32,9 @@ class FakeParser:
 class FakeRuntime:
     """Execute extraction while leaving conversation execution to the test."""
 
-    def run(self, task: Any, value: Any, *, context: object | None = None) -> Any:
+    def run_structured_task(
+        self, task: Any, value: Any, *, context: object | None = None
+    ) -> Any:
         """Return one structured achievement extraction."""
         assert task.name == "achievement_extraction"
         assert value.content.startswith("Certificate title")

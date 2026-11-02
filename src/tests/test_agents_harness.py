@@ -200,7 +200,9 @@ def test_runtime_returns_structured_output_and_request_contract(client_factory) 
     client, requests = client_factory([final("ok")])
 
     task = make_task()
-    result = AgentRuntime("test-model", client=client).run(task, "document text")
+    result = AgentRuntime("test-model", client=client).run_structured_task(
+        task, "document text"
+    )
 
     assert result == Output(value="ok")
     request = requests[0]
@@ -257,7 +259,7 @@ def test_runtime_adapts_real_achievement_schema_and_injects_source(
 def test_runtime_uses_agent_model_override(client_factory) -> None:
     """Use a task model override when it is declared."""
     client, requests = client_factory([final("ok")])
-    AgentRuntime("default-model", client=client).run(
+    AgentRuntime("default-model", client=client).run_structured_task(
         make_task(model="task-model"), "input"
     )
     assert requests[0]["model"] == "task-model"
@@ -268,7 +270,9 @@ def test_runtime_default_is_one_model_request(client_factory) -> None:
     client, requests = client_factory([response(tool_call())])
 
     with pytest.raises(AgentRuntimeError, match="final output"):
-        AgentRuntime("test-model", client=client).run(make_tool_task(), "input")
+        AgentRuntime("test-model", client=client).run_structured_task(
+            make_tool_task(), "input"
+        )
 
     assert len(requests) == 1
 
@@ -295,7 +299,7 @@ def test_runtime_replays_sdk_items_without_local_parsed_fields(client_factory) -
         ]
     )
 
-    result = AgentRuntime("test-model", client=client, max_turns=2).run(
+    result = AgentRuntime("test-model", client=client, max_turns=2).run_structured_task(
         make_tool_task(), "input"
     )
 
@@ -333,7 +337,7 @@ def test_runtime_composes_subagent_as_internal_tool(client_factory) -> None:
         ]
     )
 
-    result = AgentRuntime("test-model", client=client, max_turns=2).run(
+    result = AgentRuntime("test-model", client=client, max_turns=2).run_structured_task(
         make_manager(), "parent"
     )
 
@@ -351,7 +355,7 @@ def test_runtime_rejects_invalid_subagent_arguments(client_factory, arguments) -
         [response(tool_call(name="specialist", arguments=arguments))]
     )
     with pytest.raises(AgentRuntimeError):
-        AgentRuntime("test-model", client=client, max_turns=2).run(
+        AgentRuntime("test-model", client=client, max_turns=2).run_structured_task(
             make_manager(), "parent"
         )
 
@@ -386,7 +390,7 @@ def test_runtime_passes_context_and_executes_calls_in_order(client_factory) -> N
         ]
     )
 
-    AgentRuntime("test-model", client=client, max_turns=2).run(
+    AgentRuntime("test-model", client=client, max_turns=2).run_structured_task(
         context_task, "input", context=context
     )
 
@@ -402,7 +406,9 @@ def test_runtime_rejects_missing_or_invalid_output(client_factory, payload) -> N
     """Reject responses without a validated structured result."""
     client, _ = client_factory([payload])
     with pytest.raises(AgentRuntimeError):
-        AgentRuntime("test-model", client=client).run(make_task(), "input")
+        AgentRuntime("test-model", client=client).run_structured_task(
+            make_task(), "input"
+        )
 
 
 def test_runtime_wraps_model_errors_without_leaking_details(client_factory) -> None:
@@ -410,7 +416,9 @@ def test_runtime_wraps_model_errors_without_leaking_details(client_factory) -> N
     client, _ = client_factory([RuntimeError("test-key and private document")])
 
     with pytest.raises(AgentRuntimeError, match="model request failed") as error:
-        AgentRuntime("test-model", client=client).run(make_task(), "private document")
+        AgentRuntime("test-model", client=client).run_structured_task(
+            make_task(), "private document"
+        )
 
     assert "test-key" not in str(error.value)
     assert "private document" not in str(error.value)
@@ -429,7 +437,7 @@ def test_runtime_rejects_invalid_tool_calls(client_factory, name, arguments) -> 
     """Unify unknown tools and invalid arguments under the runtime error."""
     client, _ = client_factory([response(tool_call(name=name, arguments=arguments))])
     with pytest.raises(AgentRuntimeError):
-        AgentRuntime("test-model", client=client, max_turns=2).run(
+        AgentRuntime("test-model", client=client, max_turns=2).run_structured_task(
             make_tool_task(), "input"
         )
 
@@ -456,7 +464,7 @@ def test_runtime_rejects_tool_handler_or_encoding_errors(
 
     client, _ = client_factory([response(tool_call())])
     with pytest.raises(AgentRuntimeError, match="tool execution failed") as error:
-        AgentRuntime("test-model", client=client, max_turns=2).run(
+        AgentRuntime("test-model", client=client, max_turns=2).run_structured_task(
             failing_task, "input"
         )
     assert "private failure" not in str(error.value)
@@ -468,9 +476,9 @@ def test_runtime_enforces_tool_call_limit(client_factory) -> None:
         [response(tool_call(call_id="one"), tool_call(call_id="two"))]
     )
     with pytest.raises(AgentRuntimeError, match="tool call limit"):
-        AgentRuntime("test-model", client=client, max_turns=2, max_tool_calls=1).run(
-            make_tool_task(), "input"
-        )
+        AgentRuntime(
+            "test-model", client=client, max_turns=2, max_tool_calls=1
+        ).run_structured_task(make_tool_task(), "input")
     assert len(requests) == 1
 
 
@@ -491,8 +499,8 @@ def test_runtime_supports_different_input_and_output_types(client_factory) -> No
 
     client, requests = client_factory([final("ok"), response(message('{"count":2}'))])
     runtime = AgentRuntime("test-model", client=client)
-    assert runtime.run(make_task(), "input") == Output(value="ok")
-    assert runtime.run(count_task, 2) == Count(count=2)
+    assert runtime.run_structured_task(make_task(), "input") == Output(value="ok")
+    assert runtime.run_structured_task(count_task, 2) == Count(count=2)
     assert requests[1]["text"]["format"]["name"] == "Count"
     assert requests[1]["input"][0]["content"] == "2"
 
@@ -514,7 +522,9 @@ def test_runtime_closes_owned_client_on_context_exit(
         with AgentRuntime(
             "test-model", api_key="test-key", base_url="https://private.example/v1"
         ) as runtime:
-            assert runtime.run(make_task(), "input") == Output(value="ok")
+            assert runtime.run_structured_task(make_task(), "input") == Output(
+                value="ok"
+            )
             assert not client.is_closed()
             if fails:
                 raise ValueError("scope failed")
@@ -530,8 +540,12 @@ def test_runtime_leaves_injected_client_with_caller(client_factory, fails) -> No
     client, requests = client_factory([final("first"), final("second")])
     with pytest.raises(ValueError) if fails else nullcontext():
         with AgentRuntime("test-model", client=client) as runtime:
-            assert runtime.run(make_task(), "one") == Output(value="first")
-            assert runtime.run(make_task(), "two") == Output(value="second")
+            assert runtime.run_structured_task(make_task(), "one") == Output(
+                value="first"
+            )
+            assert runtime.run_structured_task(make_task(), "two") == Output(
+                value="second"
+            )
             if fails:
                 raise ValueError("scope failed")
     runtime.close()

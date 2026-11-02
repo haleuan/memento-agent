@@ -49,7 +49,7 @@ class FakeRuntime:
         self.agent = None
         self.value = None
 
-    def run(self, agent: Any, value: ParseSnapshot) -> Any:
+    def run_structured_task(self, agent: Any, value: ParseSnapshot) -> Any:
         """Record the task invocation and return its configured output."""
         self.agent = agent
         self.value = value
