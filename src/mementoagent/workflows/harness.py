@@ -87,7 +87,7 @@ class MementoAgent:
         Returns:
             The final Agent response for this turn.
         """
-        return self._runtime.run_turn(
+        return self._runtime.run_conversation_turn(
             self,
             self._session,
             user_input,

@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from openai.types.responses import ParsedResponseOutputItem, ResponseInputItemParam
 
-AgentEventKind = Literal["model_request", "tool_call", "tool_result"]
+AgentEventKind = Literal["model_request", "tool_call", "tool_result", "text_delta"]
 
 
 @dataclass(frozen=True)
@@ -16,11 +16,13 @@ class AgentEvent:
 
     Args:
         kind: Runtime phase that produced the event.
-        tool_name: Tool name for tool events, or `None` for model requests.
+        tool_name: Tool name for tool events, or `None` for other events.
+        text: User-visible text for a streamed text event.
     """
 
     kind: AgentEventKind
     tool_name: str | None = None
+    text: str | None = None
 
 
 @dataclass(frozen=True)

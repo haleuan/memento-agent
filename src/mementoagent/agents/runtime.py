@@ -10,10 +10,7 @@ from typing import Any, Self, cast
 
 from openai import OpenAI, omit, pydantic_responses_function_tool
 from openai.types.responses import (
-    ParsedResponseFunctionToolCall,
-    ParsedResponseOutputItem,
     ResponseFunctionToolCall,
-    ResponseInputItemParam,
     ResponseInputParam,
 )
 from openai.types.responses.response_input_param import FunctionCallOutput
@@ -28,11 +25,15 @@ class AgentRuntimeError(RuntimeError):
     """Raised when a model run cannot produce the requested output."""
 
 
+class AgentStructuredOutputError(AgentRuntimeError):
+    """Raised when a structured task has no valid final output."""
+
+
 @dataclass
 class RunState:
     """Ephemeral state for one runtime invocation."""
 
-    input_items: list[ResponseInputItemParam | ParsedResponseOutputItem[Any]]
+    input_items: list[Any]
     context: object | None = None
     turns: int = 0
     tool_calls: int = 0
@@ -97,14 +98,14 @@ class AgentRuntime:
         """Release the owned client when leaving the resource scope."""
         self.close()
 
-    def run(
+    def run_structured_task(
         self,
         agent: AgentTask[InputT, OutputT],
         value: InputT,
         *,
         context: object | None = None,
     ) -> OutputT:
-        """Run an Agent and return only its validated structured output.
+        """Run a structured task and return its validated output.
 
         Args:
             agent: Typed task declaration.
@@ -117,72 +118,34 @@ class AgentRuntime:
         Raises:
             AgentRuntimeError: If the request, tool loop, or output fails.
         """
-        tools = self._collect_tools(agent)
-        tool_by_name = {tool.name: tool for tool in tools}
-        definitions = [
-            pydantic_responses_function_tool(
-                tool.parameters, name=tool.name, description=tool.description
-            )
-            for tool in tools
-        ]
-        state = RunState(
-            [{"role": "user", "content": agent.build_input(value)}], context=context
+        text = self._run_loop(
+            cast(AgentDefinition, agent),
+            [{"role": "user", "content": agent.build_input(value)}],
+            context=context,
+            output_type=agent.output_type,
         )
+        try:
+            return agent.output_type.model_validate_json(text)
+        except Exception as error:
+            raise AgentStructuredOutputError("invalid structured output") from error
 
-        max_turns = self._agent_limit(agent, "max_turns", self._max_turns)
-        max_tool_calls = self._agent_limit(
-            agent, "max_tool_calls", self._max_tool_calls
-        )
-        while state.turns < max_turns:
-            state.turns += 1
-            try:
-                response = self._client.responses.parse(
-                    model=agent.model or self._model,
-                    instructions=agent.instructions,
-                    input=cast(ResponseInputParam, state.input_items),
-                    text_format=agent.output_type,
-                    tools=definitions or omit,
-                )
-            except Exception as error:
-                raise AgentRuntimeError("model request failed") from error
-
-            function_calls = [
-                item for item in response.output if item.type == "function_call"
-            ]
-            if function_calls:
-                if state.turns >= max_turns:
-                    raise AgentRuntimeError("model did not return final output")
-                state.input_items.extend(response.output)
-                for call in function_calls:
-                    state.tool_calls += 1
-                    if state.tool_calls > max_tool_calls:
-                        raise AgentRuntimeError("tool call limit exceeded")
-                    state.input_items.append(
-                        self._execute_tool(call, tool_by_name, state.context)
-                    )
-                continue
-
-            if response.output_parsed is None:
-                raise AgentRuntimeError("model returned no structured output")
-            return response.output_parsed
-
-        raise AgentRuntimeError("model did not return final output")
-
-    def run_turn(
+    def run_conversation_turn(
         self,
         agent: AgentDefinition,
         session: AgentSession,
         user_input: str,
         *,
         on_event: Callable[[AgentEvent], None] | None = None,
+        stream: bool = False,
     ) -> AgentTurn:
-        """Run one natural-language turn and retain its local history.
+        """Run one conversational turn and retain its local history.
 
         Args:
             agent: Conversational Agent definition.
             session: In-memory replay state for the conversation.
             user_input: New user message for this turn.
             on_event: Optional callback receiving safe runtime metadata.
+            stream: Whether to consume Responses streaming events.
 
         Returns:
             The final assistant text for the turn.
@@ -192,6 +155,26 @@ class AgentRuntime:
                 the runtime limits are exceeded.
         """
         session.input_items.append({"role": "user", "content": user_input})
+        text = self._run_loop(
+            agent,
+            session.input_items,
+            context=session.context,
+            on_event=on_event,
+            stream=stream,
+        )
+        return AgentTurn(text=text)
+
+    def _run_loop(
+        self,
+        agent: AgentDefinition,
+        input_items: list[Any],
+        *,
+        context: object | None = None,
+        output_type: type[BaseModel] | None = None,
+        on_event: Callable[[AgentEvent], None] | None = None,
+        stream: bool = False,
+    ) -> str:
+        """Run the shared Responses tool loop for one Agent invocation."""
         tools = self._collect_tools(agent)
         tool_by_name = {tool.name: tool for tool in tools}
         definitions = [
@@ -200,50 +183,124 @@ class AgentRuntime:
             )
             for tool in tools
         ]
+        state = RunState(input_items, context=context)
         max_turns = self._agent_limit(agent, "max_turns", self._max_turns)
         max_tool_calls = self._agent_limit(
             agent, "max_tool_calls", self._max_tool_calls
         )
-        turns = 0
-        tool_calls = 0
+        text_format = self._text_format(output_type)
 
-        while turns < max_turns:
-            turns += 1
+        while state.turns < max_turns:
+            state.turns += 1
             self._emit(on_event, AgentEvent("model_request"))
             try:
-                response = self._client.responses.create(
-                    model=agent.model or self._model,
-                    instructions=agent.instructions,
-                    input=cast(ResponseInputParam, session.input_items),
-                    tools=definitions or omit,
+                output_items, output_text = self._request(
+                    agent,
+                    state.input_items,
+                    definitions,
+                    text_format,
+                    stream=stream,
+                    on_event=on_event,
                 )
             except Exception as error:
+                if isinstance(error, AgentRuntimeError):
+                    raise
                 raise AgentRuntimeError("model request failed") from error
 
-            session.input_items.extend(cast(Any, response.output))
+            state.input_items.extend(output_items)
             function_calls = [
-                item for item in response.output if item.type == "function_call"
+                item for item in output_items if item.type == "function_call"
             ]
             if function_calls:
-                if turns >= max_turns:
+                if state.turns >= max_turns:
                     raise AgentRuntimeError("model did not return final output")
                 for call in function_calls:
-                    tool_calls += 1
-                    if tool_calls > max_tool_calls:
+                    state.tool_calls += 1
+                    if state.tool_calls > max_tool_calls:
                         raise AgentRuntimeError("tool call limit exceeded")
                     self._emit(on_event, AgentEvent("tool_call", call.name))
-                    output = self._execute_conversational_tool(
-                        call, tool_by_name, session.context
+                    output = self._execute_tool(
+                        call,
+                        tool_by_name,
+                        state.context,
+                        sanitize_errors=output_type is None,
                     )
-                    session.input_items.append(output)
+                    state.input_items.append(output)
                     self._emit(on_event, AgentEvent("tool_result", call.name))
                 continue
 
-            if not response.output_text:
+            if not output_text:
                 raise AgentRuntimeError("model returned no final text")
-            return AgentTurn(text=response.output_text)
+            return output_text
 
         raise AgentRuntimeError("model did not return final output")
+
+    @staticmethod
+    def _text_format(
+        output_type: type[BaseModel] | None,
+    ) -> dict[str, object] | Any:
+        if output_type is None:
+            return omit
+        schema = output_type.model_json_schema()
+        AgentRuntime._make_schema_strict(schema)
+        return {
+            "format": {
+                "type": "json_schema",
+                "name": output_type.__name__,
+                "schema": schema,
+                "strict": True,
+            }
+        }
+
+    @staticmethod
+    def _make_schema_strict(schema: object) -> None:
+        if isinstance(schema, dict):
+            properties = schema.get("properties")
+            if isinstance(properties, dict):
+                schema["required"] = list(properties)
+                schema["additionalProperties"] = False
+            for value in schema.values():
+                AgentRuntime._make_schema_strict(value)
+        elif isinstance(schema, list):
+            for value in schema:
+                AgentRuntime._make_schema_strict(value)
+
+    def _request(
+        self,
+        agent: AgentDefinition,
+        input_items: list[Any],
+        definitions: list[Any],
+        text_format: dict[str, object] | Any,
+        *,
+        stream: bool,
+        on_event: Callable[[AgentEvent], None] | None,
+    ) -> tuple[list[Any], str]:
+        request = {
+            "model": agent.model or self._model,
+            "instructions": agent.instructions,
+            "input": cast(ResponseInputParam, input_items),
+            "tools": definitions or omit,
+            "text": text_format,
+        }
+        if not stream:
+            response = self._client.responses.create(**request)
+            return list(response.output), response.output_text or ""
+
+        response_stream = self._client.responses.create(**request, stream=True)
+        output_items: list[Any] = []
+        text_parts: list[str] = []
+        for raw_event in response_stream:
+            event: Any = raw_event
+            event_type = getattr(event, "type", None)
+            if event_type == "response.output_text.delta":
+                delta = event.delta
+                text_parts.append(delta)
+                self._emit(on_event, AgentEvent("text_delta", text=delta))
+            elif event_type == "response.output_item.done":
+                output_items.append(event.item)
+            elif event_type == "error":
+                raise AgentRuntimeError("model stream failed")
+        return output_items, "".join(text_parts)
 
     @staticmethod
     def _agent_limit(agent: object, attribute: str, default: int) -> int:
@@ -267,15 +324,19 @@ class AgentRuntime:
             raise AgentRuntimeError("duplicate tool name")
         return tools
 
-    def _execute_conversational_tool(
+    def _execute_tool(
         self,
         call: ResponseFunctionToolCall,
         tool_by_name: dict[str, ToolSpec[Any]],
         context: object | None,
+        *,
+        sanitize_errors: bool,
     ) -> FunctionCallOutput:
-        """Execute a conversational tool with a sanitized failure result."""
+        """Execute one tool and optionally sanitize handler failures."""
         tool = tool_by_name.get(call.name)
         if tool is None:
+            if not sanitize_errors:
+                raise AgentRuntimeError("unknown tool")
             return {
                 "type": "function_call_output",
                 "call_id": call.call_id,
@@ -285,7 +346,9 @@ class AgentRuntime:
             arguments = tool.parameters.model_validate_json(call.arguments)
             result = tool.handler(arguments, context)
             output = json.dumps(result, ensure_ascii=False)
-        except Exception:
+        except Exception as error:
+            if not sanitize_errors:
+                raise AgentRuntimeError("tool execution failed") from error
             output = "tool execution failed"
         return {
             "type": "function_call_output",
@@ -299,9 +362,9 @@ class AgentRuntime:
         def run_subagent(
             arguments: _SubagentArguments, context: object | None
         ) -> object:
-            return self.run(agent, arguments.input, context=context).model_dump(
-                mode="json"
-            )
+            return self.run_structured_task(
+                agent, arguments.input, context=context
+            ).model_dump(mode="json")
 
         return ToolSpec(
             name=agent.name,
@@ -309,23 +372,3 @@ class AgentRuntime:
             parameters=_SubagentArguments,
             handler=run_subagent,
         )
-
-    def _execute_tool(
-        self,
-        call: ParsedResponseFunctionToolCall,
-        tool_by_name: dict[str, ToolSpec[Any]],
-        context: object | None,
-    ) -> FunctionCallOutput:
-        tool = tool_by_name.get(call.name)
-        if tool is None:
-            raise AgentRuntimeError("unknown tool")
-        try:
-            result = tool.handler(call.parsed_arguments, context)
-            output = json.dumps(result, ensure_ascii=False)
-        except Exception as error:
-            raise AgentRuntimeError("tool execution failed") from error
-        return {
-            "type": "function_call_output",
-            "call_id": call.call_id,
-            "output": output,
-        }

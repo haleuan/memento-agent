@@ -80,29 +80,28 @@ comment should be brief and reference the relevant debt ID.
 - **Review trigger**: When a second domain needs to share session context, capability registration, approval boundaries, or materialization rules with achievement.
 - **Completion criteria**: A coordinator has an explicit input, state, error, and ownership contract; generic Runtime code remains independent of capabilities; and at least two domains exercise the shared composition through offline tests.
 
-## TD-007: Expand the Agent Runtime Beyond In-Memory Turns
+## TD-007: Complete the Agent Runtime Foundation
 
-- **Status**: `accepted`
+- **Status**: `in-progress`
 - **Location**: `src/mementoagent/agents/`
-- **Current state and impact**: The Runtime now supports bounded conversational turns with in-memory replay, safe event metadata, one-shot structured tasks, and explicit tools. It does not persist sessions, resume interrupted runs, compress long contexts, perform handoffs, expose production observability, or define shared budgets for nested runs.
-- **Reason deferred**: The first user-facing Agent needs only process-local conversation state. Durable state and richer orchestration would expand the runtime contract before a concrete workflow requires them.
-- **Review trigger**: When a task needs persistent sessions, human interruption and resume, long-context management, handoff ownership, asynchronous execution, or production run observability.
-- **Completion criteria**: Each required capability has an explicit state and failure contract, and an end-to-end task has offline tests for execution limits, nested budgets, resumption, context management, and sensitive-data handling.
+- **Current state and impact**: The Runtime now has generic Agent declarations, explicit tools, bounded execution, structured-task and conversational-turn adapters, and process-local session replay. The foundation still needs one canonical loop to cover both adapters consistently, Responses typed-event streaming, a CLI session adapter, and explicit contracts for nested budgets and failure categories.
+- **Reason deferred**: Domain capabilities were implemented before the generic Runtime was fully stabilized. The project is now reordering development so the reusable Agent mechanism is completed before further Memento integration.
+- **Review trigger**: Before adding another domain capability, a TUI, persistent sessions, resume, asynchronous execution, or production observability.
+- **Completion criteria**: One shared Responses loop powers both public adapters; structured output and tool errors have distinct safe boundaries; streaming text and function-call events are normalized; an external adapter can maintain an in-memory session without importing domain code; and nested execution limits are documented.
 
 ## TD-012: TUI and Slash Command Adapter
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/cli.py` and the future TUI adapter
 - **Current state and impact**: The repository exposes the deterministic
-  `memento check` command and the TUI-neutral `MementoAgent.send()` API. There
-  is no terminal renderer, interactive session loop, or slash command
-  dispatcher.
+  `memento check` command and the TUI-neutral Agent API. There is no terminal
+  renderer, interactive CLI session loop, or slash command dispatcher.
 - **Reason deferred**: The Agent and Runtime boundaries must remain usable from
-  a web chat, test harness, or future TUI. Building a TUI before the
-  conversational Agent is exercised would couple presentation concerns to the
-  first workflow.
-- **Review trigger**: When users need an interactive terminal conversation or
-  commands such as `/init` and `/check` inside the TUI.
+  a web chat, a test harness, or a future TUI. The project is completing the
+  generic Runtime and streaming contract before adding a command-line loop.
+- **Review trigger**: After the generic Runtime foundation is complete and
+  users need an interactive terminal conversation or commands such as `/init`
+  and `/check` inside the TUI.
 - **Completion criteria**: The TUI renders `AgentTurn` text and optional safe
   `AgentEvent` metadata; slash commands are dispatched deterministically before
   ordinary text is sent to the Agent; and the Runtime remains independent of

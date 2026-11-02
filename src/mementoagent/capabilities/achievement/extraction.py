@@ -53,7 +53,7 @@ def extract_achievement(
             structured achievement.
     """
     try:
-        extraction = runtime.run(ACHIEVEMENT_EXTRACTION_TASK, snapshot)
+        extraction = runtime.run_structured_task(ACHIEVEMENT_EXTRACTION_TASK, snapshot)
     except AgentRuntimeError as error:
         raise AchievementExtractionError(str(error)) from error
 
