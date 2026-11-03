@@ -1,15 +1,12 @@
-"""Achievement extraction and record materialization capabilities."""
+"""Achievement models and materialization; Agent integration is paused."""
 
-from .extraction import AchievementExtractionError, extract_achievement
 from .materialization import AchievementMaterializationError, materialize_achievement
 from .models import AchievementDraft, AchievementExtraction, DescriptionSuggestion
 
 __all__ = [
     "AchievementDraft",
     "AchievementExtraction",
-    "AchievementExtractionError",
     "AchievementMaterializationError",
     "DescriptionSuggestion",
-    "extract_achievement",
     "materialize_achievement",
 ]

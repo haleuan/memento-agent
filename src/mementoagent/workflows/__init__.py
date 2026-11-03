@@ -1,5 +1,1 @@
-"""Application-level Agent harnesses."""
-
-from .harness import MementoAgent
-
-__all__ = ["MementoAgent"]
+"""Application harnesses, paused until the minimal Agent is reintegrated."""

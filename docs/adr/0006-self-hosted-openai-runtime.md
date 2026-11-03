@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted; the earlier Runtime and adapter design is superseded by the minimal
+Agent decision below and the updated ADR-0010.
 
 ## Context
 
@@ -11,57 +12,45 @@ Agent runtime engineering. The project therefore uses the official `openai`
 Python SDK for transport and Responses API types while keeping the execution
 loop and application boundaries in the repository.
 
-The runtime must support both one-shot structured capabilities and user-facing
-conversational Agents. These modes have different input and output contracts,
-but they must share one model/tool execution loop. Keeping two independent
-loops makes tool handling, limits, error classification, and streaming behavior
-drift over time.
+The earlier Runtime combined structured tasks, conversations, streaming,
+subagents, context injection, and client lifecycle management. Its overlapping
+protocols and adapters obscured the basic tool loop. The current priority is to
+make the complete implementation understandable before adding capabilities.
 
 ## Decision
 
-The local runtime owns the following boundaries:
+- `agents/` exports only concrete `Agent` and `Tool` types.
+- `Agent.run(user_input)` contains one synchronous `responses.create()` loop
+  and returns final text. The Agent retains its own in-memory conversation.
+- `Tool` declares a name, description, Pydantic argument model, and handler
+  accepting only validated arguments. The SDK helper generates its schema.
+- Every model output item is replayed, including reasoning items. Tool results
+  use `function_call_output` with the matching `call_id`.
+- Each invocation works on a copy of the history and commits it only after a
+  final response. Failures do not commit partial history or undo tool effects.
+- `max_model_calls` defaults to eight per invocation. Exhaustion raises
+  `RuntimeError`; API, argument validation, and handler exceptions propagate.
+- The caller creates and closes the SDK client. Agent code does not construct
+  clients, read credentials, or own transport configuration.
 
-- `AgentTask` and immutable `TaskSpec` declare one-shot structured tasks.
-- `AgentDefinition` describes a conversational Agent's instructions, tools,
-  limits, and optional subagents.
-- `ToolSpec` declares a tool name, description, Pydantic argument model, and
-  callable handler.
-- `AgentRuntime.run_structured_task()` adapts a typed task to the shared loop,
-  requests a Responses `text.format` JSON Schema, and validates the final
-  `output_text` with the task's Pydantic output type.
-- `AgentRuntime.run_conversation_turn()` adapts one user message to the same
-  loop, replays local session items, dispatches tools, and returns only an
-  `AgentTurn` containing user-visible text.
-- Both public methods use `responses.create()`; `responses.parse()` is not part
-  of the Runtime execution path.
-- `AgentSession` is in-memory and scoped to one user conversation. It stores
-  SDK input items internally but does not expose SDK responses to application
-  code.
-- `AgentEvent` exposes only safe phases, tool names, and optional user-visible
-  text deltas for a future CLI or TUI; it never contains credentials, raw
-  arguments, document text, or tool output.
-
-The default runtime limit remains one model request and eight tool calls.
-Conversational Agents may declare higher limits explicitly. Tool failures in a
-conversation become sanitized model-readable tool results; API and Runtime
-failures remain `AgentRuntimeError` failures. No automatic retry policy is
-introduced.
-
-Subagents remain a composition point rather than a global registry. Handoffs,
-persistent sessions, resume, context compression, asynchronous execution,
-ReAct orchestration, and production observability remain deferred.
+There are no Runtime/task protocols, compatibility wrappers, structured final
+output adapters, separate Sessions, events, streaming, subagents, or generic
+context injection. These can be reconsidered individually after the minimal
+loop is understood.
 
 ## Consequences
 
 - The model controls the order in which application capabilities run.
-- Structured extraction remains testable as a one-shot task without becoming a
-  user-facing specialized Agent.
-- Conversation state and streaming events can later be rendered by a CLI, TUI,
-  or web adapter without changing the Runtime loop.
+- The complete execution path is readable in `Tool` and `Agent.run()`.
+- Existing Memento extraction and application integration are retained but
+  paused; they still reference deleted APIs. Package initializers no longer
+  import those modules automatically.
+- Deterministic materialization, workspace I/O, parsers, validation, and the
+  check CLI remain independent and usable.
 - The project depends on the official OpenAI Python SDK rather than adopting a
   second Agent orchestration framework.
-- Runtime changes must preserve source provenance boundaries and add an
-  explicit state and failure contract before expanding execution scope.
+- Domain provenance remains the responsibility of later integration, not the
+  generic Agent loop.
 
 ## Rejected alternative
 
@@ -71,6 +60,5 @@ of this project. It remains a reference for design, not a runtime dependency.
 
 ## Future trigger
 
-Add persistence, resume, handoffs, context management, asynchronous APIs, or
-concrete subagents only when a user-facing conversation demonstrates the need
-and the behavior can be covered by offline runtime tests.
+Add features individually when the minimal loop is understood and a concrete
+use requires them. New or expanded tests require explicit user approval.

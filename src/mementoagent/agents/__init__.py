@@ -1,19 +1,6 @@
-"""Generic Agent runtime interfaces for Memento."""
+"""A minimal conversational Agent with function tools."""
 
-from .runtime import AgentRuntime, AgentRuntimeError, AgentStructuredOutputError
-from .session import AgentEvent, AgentSession, AgentTurn
-from .task import AgentDefinition, AgentTask, TaskSpec
-from .tools import ToolSpec
+from .agent import Agent
+from .tools import Tool
 
-__all__ = [
-    "AgentRuntime",
-    "AgentRuntimeError",
-    "AgentStructuredOutputError",
-    "AgentDefinition",
-    "AgentEvent",
-    "AgentSession",
-    "AgentTask",
-    "TaskSpec",
-    "AgentTurn",
-    "ToolSpec",
-]
+__all__ = ["Agent", "Tool"]

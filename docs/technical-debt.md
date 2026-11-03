@@ -66,46 +66,46 @@ comment should be brief and reference the relevant debt ID.
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/capabilities/achievement/`
-- **Current state and impact**: Achievement extraction, Agent confirmation, deterministic materialization, source validation, and TOML persistence are connected through the root `MementoAgent`. The capability preserves source-level provenance and accepted descriptions, but occurrence dates remain unset and evidence has no page, quote, or field-level supports.
-- **Reason deferred**: Date interpretation and fine-grained claim mapping require concrete consumers and contracts; adding them to the first Agent-driven path would make the capability responsible for unsupported certainty.
-- **Review trigger**: When generated outputs need occurrence dates, page or quote references, or different provenance semantics for user-authored facts.
-- **Completion criteria**: A deterministic date parser produces `PartialDate`; evidence identifies supported claims at the required precision; and provenance semantics distinguish source facts, OCR corrections, and user additions without weakening source traceability.
+- **Current state and impact**: Models, deterministic materialization, source validation, and TOML persistence remain available. Extraction and the old root `MementoAgent` integration are retained but paused because they depend on removed Runtime APIs. Automatic source-to-record interaction is unavailable. Occurrence dates also remain unset and evidence has no page, quote, or field-level supports.
+- **Reason deferred**: The user approved prioritizing an understandable minimal Agent over preserving the old integration. Date interpretation and fine-grained claim mapping still require concrete consumers and contracts.
+- **Review trigger**: After the minimal Agent loop is understood, before restoring Memento interaction; review date and evidence depth when an output requires them.
+- **Completion criteria**: Extraction and application tools use the new Agent API without compatibility shims, preserving approval and source boundaries. When required, a deterministic date parser produces `PartialDate`, evidence identifies supported claims at the required precision, and provenance distinguishes source facts, OCR corrections, and user additions.
 
 ## TD-011: Cross-Domain Capability Composition
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/workflows/` and `src/mementoagent/capabilities/`
-- **Current state and impact**: The Memento workflow harness currently composes one root Agent with achievement capabilities. There is no shared capability registry or reusable cross-domain coordinator.
-- **Reason deferred**: A second domain has not yet demonstrated a shared sequencing or context requirement. A generic coordinator now would recreate the fixed workflow problem the Agent-centered design removes.
-- **Review trigger**: When a second domain needs to share session context, capability registration, approval boundaries, or materialization rules with achievement.
-- **Completion criteria**: A coordinator has an explicit input, state, error, and ownership contract; generic Runtime code remains independent of capabilities; and at least two domains exercise the shared composition through offline tests.
+- **Current state and impact**: The retained workflow harness and semantic tools target the removed Runtime and are temporarily unavailable. The minimal Agent has no capability registry, generic context, or coordinator. There is currently no active application composition layer.
+- **Reason deferred**: Reconnecting one domain follows understanding the minimal Agent. A second domain has not demonstrated a shared composition requirement; introducing a generic coordinator now would add unnecessary abstraction.
+- **Review trigger**: After restoring the first domain, when a second domain requires shared approval, dependency, or materialization behavior.
+- **Completion criteria**: Concrete domains compose tools through the minimal Agent without domain imports in `agents/`; any shared abstraction addresses demonstrated reuse and defines ownership and failure behavior.
 
-## TD-007: Complete the Agent Runtime Foundation
+## TD-007: Grow the Minimal Agent Incrementally
 
 - **Status**: `in-progress`
 - **Location**: `src/mementoagent/agents/`
-- **Current state and impact**: The Runtime now has generic Agent declarations, explicit tools, bounded execution, structured-task and conversational-turn adapters, and process-local session replay. The foundation still needs one canonical loop to cover both adapters consistently, Responses typed-event streaming, a CLI session adapter, and explicit contracts for nested budgets and failure categories.
-- **Reason deferred**: Domain capabilities were implemented before the generic Runtime was fully stabilized. The project is now reordering development so the reusable Agent mechanism is completed before further Memento integration.
-- **Review trigger**: Before adding another domain capability, a TUI, persistent sessions, resume, asynchronous execution, or production observability.
-- **Completion criteria**: One shared Responses loop powers both public adapters; structured output and tool errors have distinct safe boundaries; streaming text and function-call events are normalized; an external adapter can maintain an in-memory session without importing domain code; and nested execution limits are documented.
+- **Current state and impact**: `Agent` and `Tool` provide one synchronous Responses loop, Pydantic tool arguments, a per-call model request limit, and instance-local multi-turn history. The old Runtime/task protocols, structured output adapter, Session/events, streaming, subagents, and context injection are removed. Old Agent and integration tests still target those deleted APIs, so full pytest and full-project Pyright are not currently valid acceptance checks.
+- **Reason deferred**: The user requested a substantially smaller implementation to understand before adding features. No advanced capability or test migration should be restored merely for compatibility.
+- **Review trigger**: Once the minimal loop is understood and a concrete use requires structured output, streaming, persistence/resume, context compression, cancellation, async execution, handoffs, nested budgets, or observability.
+- **Completion criteria**: Each approved extension is introduced independently with a readable contract. Obsolete tests are migrated or replaced only with explicit user approval, and full-project checks become meaningful again after paused integrations are addressed. No compatibility wrappers recreate the deleted framework.
 
 ## TD-012: TUI and Slash Command Adapter
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/cli.py` and the future TUI adapter
 - **Current state and impact**: The repository exposes the deterministic
-  `memento check` command and the TUI-neutral Agent API. There is no terminal
-  renderer, interactive CLI session loop, or slash command dispatcher.
-- **Reason deferred**: The Agent and Runtime boundaries must remain usable from
-  a web chat, a test harness, or a future TUI. The project is completing the
-  generic Runtime and streaming contract before adding a command-line loop.
+  `memento check` command and a minimal text-returning Agent API. There is no
+  terminal renderer, interactive CLI session loop, or slash command dispatcher.
+- **Reason deferred**: The Agent must first remain understandable independently
+  of terminal rendering. The minimal foundation deliberately omits streaming
+  and lifecycle events; an outer adapter can be designed when needed.
 - **Review trigger**: After the generic Runtime foundation is complete and
   users need an interactive terminal conversation or commands such as `/init`
   and `/check` inside the TUI.
-- **Completion criteria**: The TUI renders `AgentTurn` text and optional safe
-  `AgentEvent` metadata; slash commands are dispatched deterministically before
-  ordinary text is sent to the Agent; and the Runtime remains independent of
-  terminal rendering.
+- **Completion criteria**: The adapter renders Agent text and any explicitly
+  approved future streaming contract; slash commands are dispatched
+  deterministically before ordinary text is sent to the Agent; and the Agent
+  remains independent of terminal rendering.
 
 ## TD-008: Evaluate Strict Static Type Checking
 
