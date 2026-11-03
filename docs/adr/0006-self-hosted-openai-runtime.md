@@ -3,8 +3,9 @@
 ## Status
 
 Accepted; the manually implemented loop and replay-history policy below are
-superseded by the manual Responses API loop and message-history policy in
-[ADR-0010](0010-agent-first-runtime-foundation.md).
+superseded by the manual Responses API loop and explicit Conversation policy in
+[ADR-0010](0010-agent-first-runtime-foundation.md). The current directory
+layout and public interfaces are defined by ADR-0010.
 
 ## Context
 
@@ -20,29 +21,21 @@ make the complete implementation understandable before adding capabilities.
 
 ## Decision
 
-- `agents/` exports only concrete `Agent` and `Tool` types.
-- `Agent.run(user_input)` contains one synchronous `responses.create()` loop
-  and returns final text. The Agent retains its own in-memory conversation.
-- `Tool` declares a name, description, Pydantic argument model, and handler
-  accepting only validated arguments. The SDK helper generates its schema.
-- Every model output item is replayed, including reasoning items. Tool results
-  use `function_call_output` with the matching `call_id`.
-- Each invocation works on a copy of the history and commits it only after a
-  final response. Failures do not commit partial history or undo tool effects.
-- `max_model_calls` defaults to eight per invocation. Exhaustion raises
-  `RuntimeError`; API, argument validation, and handler exceptions propagate.
-- The caller creates and closes the SDK client. Agent code does not construct
-  clients, read credentials, or own transport configuration.
+The original decision was to own a small manual Responses API loop rather than
+adopt a second orchestration framework. Its concrete current interfaces,
+including layered `runtime/` and `conversation/` packages, explicit
+`Conversation` history, model-visible tool failures, and commit-on-completed
+turn semantics, are superseded by [ADR-0010](0010-agent-first-runtime-foundation.md).
 
-There are no Runtime/task protocols, compatibility wrappers, structured final
-output adapters, separate Sessions, events, streaming, subagents, or generic
-context injection. These can be reconsidered individually after the minimal
-loop is understood.
+The historical transport boundary remains: the caller creates and closes the
+OpenAI client, while Agent code does not construct clients, read credentials,
+or own transport configuration.
 
 ## Consequences
 
 - The model controls the order in which application capabilities run.
-- The complete execution path is readable in `Tool` and `Agent.run()`.
+- The complete execution path is readable in `Tool`, `Conversation`, and
+  `Agent.run()`.
 - Existing Memento extraction and application integration are retained but
   paused; they still reference deleted APIs. Package initializers no longer
   import those modules automatically.

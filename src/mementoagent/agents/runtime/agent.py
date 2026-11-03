@@ -1,15 +1,17 @@
-"""A synchronous Responses API tool loop with in-memory conversation history."""
+"""A synchronous Responses API function-tool loop."""
 
+import json
 from collections.abc import Sequence
 from typing import Any
 
 from openai import OpenAI, omit
 
+from ..conversation import Conversation
 from .tools import Tool
 
 
 class Agent:
-    """Keep a conversation and execute the function tools chosen by a model."""
+    """Execute the function tools chosen by a model."""
 
     def __init__(
         self,
@@ -33,13 +35,13 @@ class Agent:
         self.instructions = instructions
         self.tools = tuple(tools)
         self.max_model_calls = max_model_calls
-        self.history: list[Any] = []
 
-    def run(self, user_input: str) -> str:
+    def run(self, user_input: str, *, conversation: Conversation) -> str:
         """Respond to a user message, calling tools when requested.
 
         Args:
             user_input: New user message in this conversation.
+            conversation: In-memory history to continue and update.
 
         Returns:
             The model's final text response.
@@ -47,11 +49,12 @@ class Agent:
         Raises:
             RuntimeError: If the model request limit is exhausted.
 
-        API, argument validation, and tool errors propagate to the caller.
-        History is committed only after a final response. Tool side effects
-        are not rolled back when a call fails.
+        API errors propagate to the caller. Tool failures are returned to the
+        model as function outputs. Conversation history is committed only
+        after a completed final response. Tool side effects are not rolled
+        back if the turn fails.
         """
-        items = [*self.history, {"role": "user", "content": user_input}]
+        items = [*conversation._items, {"role": "user", "content": user_input}]
         tool_by_name = {tool.name: tool for tool in self.tools}
         definitions = [tool.definition() for tool in self.tools]
 
@@ -62,16 +65,32 @@ class Agent:
                 input=items,
                 tools=definitions or omit,
             )
+            if response.status != "completed":
+                raise RuntimeError(
+                    f"model response did not complete (status: {response.status})"
+                )
             items.extend(response.output)
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:
-                self.history = items
+                conversation._items = items
                 return response.output_text
             if call_number == self.max_model_calls - 1:
                 raise RuntimeError("model request limit exhausted")
 
             for call in calls:
-                output = tool_by_name[call.name].execute(call.arguments)
+                tool = tool_by_name.get(call.name)
+                if tool is None:
+                    output = json.dumps(
+                        {
+                            "error": {
+                                "kind": "unknown_tool",
+                                "message": "This tool is not available. Choose a declared tool.",
+                            }
+                        },
+                        ensure_ascii=False,
+                    )
+                else:
+                    output = tool.execute(call.arguments)
                 items.append(
                     {
                         "type": "function_call_output",

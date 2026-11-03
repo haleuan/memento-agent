@@ -23,29 +23,40 @@ importing Memento workspace or achievement code.
 Develop the generic Agent Runtime first using the official OpenAI Python SDK
 and the Responses API.
 
-The package contains only `__init__.py`, `agent.py`, and `tools.py`, and exports
-`Agent` and `Tool`. `Agent.run()` contains one synchronous Responses API tool
-loop and returns text. Each instance retains its own local message history,
-including model output items and tool results. Pydantic is used only for tool
+The package is layered by current responsibility: `runtime/` contains `Agent`
+and `Tool`, while `conversation/` contains `Conversation`. The package root
+exports `Agent`, `Tool`, `ToolError`, and `Conversation`. `Agent.run()` contains
+one synchronous Responses API tool loop and returns text. The caller passes an
+explicit Conversation to each run; it retains complete local replay history,
+including model output items and tool results. History is private to the
+Conversation and can be cleared with `clear()`. Pydantic is used only for tool
 arguments. The caller owns the OpenAI client.
 
 `Tool.definition()` uses the SDK's Pydantic Responses declaration helper.
 `Tool.execute()` validates JSON arguments, invokes the handler, and serializes
-the result. `Agent.run()` sends model requests, appends every output item,
-dispatches function calls, and appends `function_call_output` items with their
-`call_id`. The default limit is eight model requests per call. If a request
-limit is reached before a final response, `run()` raises `RuntimeError` without
-executing tool calls from that last response. Model and tool errors otherwise
-propagate. Tool side effects already performed are not rolled back.
+the result. Argument validation errors and explicit `ToolError` messages are
+returned as model-visible tool outputs; unexpected handler errors produce a
+generic output without exception details. `Agent.run()` sends model requests,
+appends every output item, dispatches function calls, and appends
+`function_call_output` items with their `call_id`. Unknown tool names also
+produce a model-visible error output. The default limit is eight model
+requests per call. If a request limit is reached before a final response,
+`run()` raises `RuntimeError` without executing tool calls from that last
+response. Non-completed responses fail without committing the Conversation.
+API errors propagate after the SDK's configured retries. Tool side effects
+already performed are not rolled back.
 
 The loop replays native reasoning and function-call items unchanged, rather
 than imposing the SDK `ResponsesToolRunner`'s additional native-reasoning shape
-validation. Cross-call history is committed only after a successful final
-response.
+validation. Conversation history is committed only after a completed final
+response. A failed turn is not retained, even if a tool side effect already
+occurred; callers must account for that before retrying non-idempotent
+operations.
 
 Remove the earlier Runtime, task declarations and protocols, structured output
-adapter, standalone Session, events, streaming, subagents, and context injection.
-Do not preserve them through compatibility wrappers or a legacy package.
+adapter, events, streaming, subagents, and generic context injection. Use an
+explicit in-memory Conversation for history, without persistence or resume. Do
+not preserve removed APIs through compatibility wrappers or a legacy package.
 
 Memento capabilities are future downstream consumers of this Agent. The Agent
 must not import workspace, parser, schema, capability, or workflow modules.
@@ -63,9 +74,9 @@ them. Deterministic domain modules remain usable.
 - Domain integration is paused until the minimal loop is understood. Old
   integration tests remain unchanged and are excluded from scoped checks;
   full-project validation is not claimed.
-- Structured output, streaming, session persistence, resume, context
-  compression, handoffs, asynchronous execution, and observability remain
-  later work, introduced only for concrete needs.
+- Structured output, streaming, conversation persistence, resume, context
+  compression, handoffs, asynchronous execution, and observability remain later
+  work, introduced only for concrete needs.
 - README is not part of this architectural migration unless explicitly
   requested.
 
