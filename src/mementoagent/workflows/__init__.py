@@ -1,1 +1,5 @@
-"""Application harnesses, paused until the minimal Agent is reintegrated."""
+"""Application-level Memento Agent assembly."""
+
+from .harness import MementoAgent
+
+__all__ = ["MementoAgent"]
