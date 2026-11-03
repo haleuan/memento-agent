@@ -19,21 +19,18 @@ capabilities.
 ## Decision
 
 Use a root `MementoAgent` as the application control layer. The Agent receives
-ordinary user messages through an in-memory `AgentSession` and chooses semantic
-capability tools. The Runtime owns the Responses API loop, tool execution,
-conversation history, limits, and safe events.
+ordinary user messages through an in-memory `Conversation` and chooses semantic
+capability tools. The generic Agent owns the Responses API loop, tool execution,
+conversation replay, and model-call limits.
 
 Achievement extraction remains a one-shot structured capability. Materialization
 and saving remain deterministic capability operations. The root Agent submits a
 complete confirmed `AchievementItem`; source identity, provenance, evidence, and
 record identity are supplied or validated by application code.
 
-The root Agent also exposes read-only `list_records` and `get_record` tools.
-`list_records` returns generic envelope metadata plus a small projection for
-known record types. `get_record` returns the raw TOML structure so records with
-future or unknown payload schemas remain inspectable without weakening the
-typed loading contract used by known application code. These tools do not read
-parse snapshots or source files and do not mutate the workspace.
+The first vertical slice exposes source preparation, achievement extraction, and
+confirmed achievement saving. Read-only record retrieval remains a later
+capability and is not part of the current tool set.
 
 The `workflows/` package contains the application harness that composes the
 Agent and its context. Domain operations live under `capabilities/`. A fixed

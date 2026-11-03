@@ -58,25 +58,25 @@ adapter, events, streaming, subagents, and generic context injection. Use an
 explicit in-memory Conversation for history, without persistence or resume. Do
 not preserve removed APIs through compatibility wrappers or a legacy package.
 
-Memento capabilities are future downstream consumers of this Agent. The Agent
-must not import workspace, parser, schema, capability, or workflow modules.
-CLI and TUI code remain outer adapters: deterministic slash commands are
-handled by the adapter, while ordinary natural-language input is sent to an
-Agent. The retained extraction, harness, and workflow tools are temporarily
-incompatible with the new API; package initializers must not eagerly import
-them. Deterministic domain modules remain usable.
+Memento capabilities consume this Agent through an application harness. The
+Agent still must not import workspace, parser, schema, capability, or workflow
+modules. `Agent.run_structured()` is a one-shot, no-tools, no-history adapter
+for Pydantic extraction; capability modules own their prompts and output
+models, while the Agent owns the SDK request and validation boundary. CLI and
+TUI code remain outer adapters: deterministic slash commands are handled by
+the adapter, while ordinary natural-language input is sent to an Agent.
 
 ## Consequences
 
 - The Agent Loop can be understood and exercised independently of Memento.
 - Ordinary functions or bound methods supply tool dependencies without a
   generic context mechanism or specialized Agent subclasses.
-- Domain integration is paused until the minimal loop is understood. Old
-  integration tests remain unchanged and are excluded from scoped checks;
-  full-project validation is not claimed.
-- Structured output, streaming, conversation persistence, resume, context
-  compression, handoffs, asynchronous execution, and observability remain later
-  work, introduced only for concrete needs.
+- The first achievement vertical slice can be assembled without importing
+  Memento code into `agents/`; its line-oriented `memento chat` adapter remains
+  outside the generic package.
+- Streaming, conversation persistence, resume, context compression, handoffs,
+  asynchronous execution, and observability remain later work, introduced only
+  for concrete needs.
 - README is not part of this architectural migration unless explicitly
   requested.
 

@@ -36,9 +36,8 @@ or own transport configuration.
 - The model controls the order in which application capabilities run.
 - The complete execution path is readable in `Tool`, `Conversation`, and
   `Agent.run()`.
-- Existing Memento extraction and application integration are retained but
-  paused; they still reference deleted APIs. Package initializers no longer
-  import those modules automatically.
+- Memento extraction and the first application harness now consume the minimal
+  Agent API. Later capabilities remain outside the generic package.
 - Deterministic materialization, workspace I/O, parsers, validation, and the
   check CLI remain independent and usable.
 - The project depends on the official OpenAI Python SDK rather than adopting a

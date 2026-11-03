@@ -28,9 +28,9 @@ comment should be brief and reference the relevant debt ID.
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/cli.py`
-- **Current state and impact**: The CLI entry point currently contains parser construction and the complete `check` command flow. More commands would make the entry point harder to review and test in isolation.
-- **Reason deferred**: The CLI currently exposes only one command, so extracting a command module would add structure without current benefit.
-- **Review trigger**: Before adding the second CLI command.
+- **Current state and impact**: The CLI entry point contains parser construction, deterministic `init` and `check` commands, and the thin line-oriented `chat` adapter. Additional commands would make the entry point harder to review and test in isolation.
+- **Reason deferred**: The current two-command surface is still small enough to keep as one composition entry point.
+- **Review trigger**: Before adding a third command or a slash-command dispatcher.
 - **Completion criteria**: `cli.py` remains the composition and dispatch entry point; each command has an independent module and tests; the public `mementoagent.cli:main` entry point remains stable.
 
 ## TD-003: Parse Snapshot Path Contract
@@ -66,42 +66,40 @@ comment should be brief and reference the relevant debt ID.
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/capabilities/achievement/`
-- **Current state and impact**: Models, deterministic materialization, source validation, and TOML persistence remain available. Extraction and the old root `MementoAgent` integration are retained but paused because they depend on removed Runtime APIs. Automatic source-to-record interaction is unavailable. Occurrence dates also remain unset and evidence has no page, quote, or field-level supports.
-- **Reason deferred**: The user approved prioritizing an understandable minimal Agent over preserving the old integration. Date interpretation and fine-grained claim mapping still require concrete consumers and contracts.
-- **Review trigger**: After the minimal Agent loop is understood, before restoring Memento interaction; review date and evidence depth when an output requires them.
+- **Current state and impact**: Achievement extraction and the Memento harness now use the minimal Agent API, and the first vertical slice is available through a line-oriented `memento chat` adapter. Occurrence dates remain unset and evidence has no page, quote, or field-level supports.
+- **Reason deferred**: Date interpretation and fine-grained claim mapping require concrete consumers and contracts beyond the first usable slice.
+- **Review trigger**: Before a workflow needs event dates or evidence more precise than source-level traceability.
 - **Completion criteria**: Extraction and application tools use the new Agent API without compatibility shims, preserving approval and source boundaries. When required, a deterministic date parser produces `PartialDate`, evidence identifies supported claims at the required precision, and provenance distinguishes source facts, OCR corrections, and user additions.
 
 ## TD-011: Cross-Domain Capability Composition
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/workflows/` and `src/mementoagent/capabilities/`
-- **Current state and impact**: The retained workflow harness and semantic tools target the removed Runtime and are temporarily unavailable. The minimal Agent has no capability registry, generic context, or coordinator. There is currently no active application composition layer.
-- **Reason deferred**: Reconnecting one domain follows understanding the minimal Agent. A second domain has not demonstrated a shared composition requirement; introducing a generic coordinator now would add unnecessary abstraction.
-- **Review trigger**: After restoring the first domain, when a second domain requires shared approval, dependency, or materialization behavior.
+- **Current state and impact**: The Memento harness and semantic tools compose the first achievement domain around the minimal Agent. There is still no capability registry, generic context, or coordinator.
+- **Reason deferred**: A second domain has not demonstrated a shared composition requirement; introducing a generic coordinator now would add unnecessary abstraction.
+- **Review trigger**: When a second domain requires shared approval, dependency, or materialization behavior.
 - **Completion criteria**: Concrete domains compose tools through the minimal Agent without domain imports in `agents/`; any shared abstraction addresses demonstrated reuse and defines ownership and failure behavior.
 
 ## TD-007: Grow the Minimal Agent Incrementally
 
 - **Status**: `in-progress`
 - **Location**: `src/mementoagent/agents/`
-- **Current state and impact**: `Agent.run()` owns a bounded synchronous Responses API tool loop and uses an explicit in-memory `Conversation` for complete replay history. `Tool` uses the SDK Pydantic helper for declarations, validates arguments, and returns model-visible error outputs for validation and handler failures. A failed turn is not committed, even if a prior tool side effect succeeded, so callers can lose the conversational trace of an operation that already changed external state and may duplicate it if they retry blindly. The old Runtime/task protocols, structured output adapter, events, streaming, subagents, and context injection are removed. The SDK `ResponsesToolRunner` was removed after it rejected a response during its additional native reasoning validation. Old Agent and integration tests still target deleted APIs, so full pytest and full-project Pyright are not currently valid acceptance checks.
+- **Current state and impact**: `Agent.run()` owns a bounded synchronous Responses API tool loop and uses an explicit in-memory `Conversation` for complete replay history. `Agent.run_structured()` provides one-shot Pydantic extraction. `Tool` uses the SDK Pydantic helper for declarations, validates arguments, and returns model-visible error outputs for validation and handler failures. The first achievement vertical slice is available through the application harness and line-oriented `memento chat`. A failed turn is not committed, even if a prior tool side effect succeeded, so callers can lose the conversational trace of an operation that already changed external state and may duplicate it if they retry blindly. Streaming, persistence, resume, context compression, cancellation, async execution, handoffs, nested budgets, and observability remain absent.
 - **Reason deferred**: The user requested a substantially smaller implementation to understand before adding features. No advanced capability or test migration should be restored merely for compatibility.
-- **Review trigger**: Before integrating non-idempotent tools that can run before a later model/API failure; and when a concrete use requires structured output, streaming, persistence/resume, context compression, cancellation, async execution, handoffs, nested budgets, or observability.
+- **Review trigger**: Before integrating non-idempotent tools that can run before a later model/API failure; and when a concrete use requires streaming, persistence/resume, context compression, cancellation, async execution, handoffs, nested budgets, or observability.
 - **Completion criteria**: Each approved extension is introduced independently with a readable contract. Before non-idempotent application tools are integrated, failed-turn recovery or idempotency is defined so retries cannot silently duplicate side effects. Obsolete tests are migrated or replaced only with explicit user approval, and full-project checks become meaningful again after paused integrations are addressed. No compatibility wrappers recreate the deleted framework.
 
 ## TD-012: TUI and Slash Command Adapter
 
 - **Status**: `accepted`
 - **Location**: `src/mementoagent/cli.py` and the future TUI adapter
-- **Current state and impact**: The repository exposes the deterministic
-  `memento check` command and a minimal text-returning Agent API. There is no
-  terminal renderer, interactive CLI session loop, or slash command dispatcher.
-- **Reason deferred**: The Agent must first remain understandable independently
-  of terminal rendering. The minimal foundation deliberately omits streaming
-  and lifecycle events; an outer adapter can be designed when needed.
-- **Review trigger**: After the generic Runtime foundation is complete and
-  users need an interactive terminal conversation or commands such as `/init`
-  and `/check` inside the TUI.
+- **Current state and impact**: The repository exposes deterministic
+  `memento check` and a thin line-oriented `memento chat --workspace` adapter.
+  There is no terminal renderer, streaming output, or slash command dispatcher.
+- **Reason deferred**: TUI rendering and slash commands require a concrete
+  interaction design; the current chat adapter is intentionally minimal.
+- **Review trigger**: When users need `/init`, `/check`, streaming rendering,
+  or a persistent terminal conversation.
 - **Completion criteria**: The adapter renders Agent text and any explicitly
   approved future streaming contract; slash commands are dispatched
   deterministically before ordinary text is sent to the Agent; and the Agent

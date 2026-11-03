@@ -18,14 +18,14 @@ workspace mutation, schema validation, and record materialization deterministic.
 
 The architecture has three separate layers:
 
-- `agents/` contains generic Runtime infrastructure, task declarations,
-  sessions, and tool protocols. It must not import domain capabilities.
+- `agents/` contains the generic `Agent`, `Tool`, and `Conversation` types.
+  It must not import domain capabilities.
 - `capabilities/achievement/` contains achievement schemas used only during
   extraction and deterministic materialization. It provides operations that an
   Agent may call; it does not own a user conversation.
-- `workflows/harness.py` assembles the root `MementoAgent`, per-conversation
-  context, and semantic capability tools. It is an application harness, not a
-  fixed source-to-record pipeline.
+- `workflows/harness.py` assembles the root `MementoAgent`, an in-memory
+  conversation, and semantic capability tools. It is an application harness,
+  not a fixed source-to-record pipeline.
 
 The root Agent decides whether to inspect the inbox, prepare a source, extract
 facts, ask for clarification, or save a confirmed record. There is no generic
