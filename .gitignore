@@ -26,3 +26,6 @@ AGENTS.md
 
 # OS-specific files
 .DS_Store
+
+# Docs
+docs/
