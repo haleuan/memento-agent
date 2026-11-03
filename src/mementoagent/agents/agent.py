@@ -1,9 +1,9 @@
-"""A synchronous Responses API loop with in-memory conversation history."""
+"""A synchronous Responses API tool loop with in-memory conversation history."""
 
 from collections.abc import Sequence
 from typing import Any
 
-from openai import OpenAI
+from openai import OpenAI, omit
 
 from .tools import Tool
 
@@ -55,26 +55,28 @@ class Agent:
         tool_by_name = {tool.name: tool for tool in self.tools}
         definitions = [tool.definition() for tool in self.tools]
 
-        for _ in range(self.max_model_calls):
+        for call_number in range(self.max_model_calls):
             response = self.client.responses.create(
                 model=self.model,
                 instructions=self.instructions,
                 input=items,
-                tools=definitions,
+                tools=definitions or omit,
             )
             items.extend(response.output)
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:
                 self.history = items
                 return response.output_text
+            if call_number == self.max_model_calls - 1:
+                raise RuntimeError("model request limit exhausted")
 
             for call in calls:
-                tool = tool_by_name[call.name]
+                output = tool_by_name[call.name].execute(call.arguments)
                 items.append(
                     {
                         "type": "function_call_output",
                         "call_id": call.call_id,
-                        "output": tool.execute(call.arguments),
+                        "output": output,
                     }
                 )
 

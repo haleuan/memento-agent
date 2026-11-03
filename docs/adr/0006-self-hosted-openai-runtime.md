@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted; the earlier Runtime and adapter design is superseded by the minimal
-Agent decision below and the updated ADR-0010.
+Accepted; the manually implemented loop and replay-history policy below are
+superseded by the manual Responses API loop and message-history policy in
+[ADR-0010](0010-agent-first-runtime-foundation.md).
 
 ## Context
 

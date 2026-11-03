@@ -24,19 +24,24 @@ Develop the generic Agent Runtime first using the official OpenAI Python SDK
 and the Responses API.
 
 The package contains only `__init__.py`, `agent.py`, and `tools.py`, and exports
-`Agent` and `Tool`. `Agent.run()` contains the complete synchronous Responses
-tool loop and returns text. Each instance retains its own history. Pydantic is
-used only for tool arguments. The caller owns the OpenAI client.
+`Agent` and `Tool`. `Agent.run()` contains one synchronous Responses API tool
+loop and returns text. Each instance retains its own local message history,
+including model output items and tool results. Pydantic is used only for tool
+arguments. The caller owns the OpenAI client.
 
-`Tool.definition()` generates its API declaration with the SDK helper.
+`Tool.definition()` uses the SDK's Pydantic Responses declaration helper.
 `Tool.execute()` validates JSON arguments, invokes the handler, and serializes
-the result as JSON. `Agent.run()` retains model requests, tool lookup,
-`call_id` result envelopes, and history management. Tool declarations and the
-lookup map are rebuilt for each call without caching or additional layers.
+the result. `Agent.run()` sends model requests, appends every output item,
+dispatches function calls, and appends `function_call_output` items with their
+`call_id`. The default limit is eight model requests per call. If a request
+limit is reached before a final response, `run()` raises `RuntimeError` without
+executing tool calls from that last response. Model and tool errors otherwise
+propagate. Tool side effects already performed are not rolled back.
 
-The default request limit is eight per call. API and tool exceptions propagate;
-limit exhaustion raises `RuntimeError`. History is committed only on success,
-without rolling back already executed tool effects.
+The loop replays native reasoning and function-call items unchanged, rather
+than imposing the SDK `ResponsesToolRunner`'s additional native-reasoning shape
+validation. Cross-call history is committed only after a successful final
+response.
 
 Remove the earlier Runtime, task declarations and protocols, structured output
 adapter, standalone Session, events, streaming, subagents, and context injection.

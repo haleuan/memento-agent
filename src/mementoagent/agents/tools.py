@@ -45,5 +45,4 @@ class Tool(Generic[ParamsT]):
             The handler result serialized as JSON.
         """
         arguments = self.parameters.model_validate_json(arguments_json)
-        result = self.handler(arguments)
-        return json.dumps(result, ensure_ascii=False)
+        return json.dumps(self.handler(arguments), ensure_ascii=False)
