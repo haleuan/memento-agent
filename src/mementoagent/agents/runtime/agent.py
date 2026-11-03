@@ -2,12 +2,19 @@
 
 import json
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, TypeVar
 
 from openai import OpenAI, omit
+from pydantic import BaseModel, ValidationError
 
 from ..conversation import Conversation
 from .tools import Tool
+
+OutputT = TypeVar("OutputT", bound=BaseModel)
+
+
+class StructuredOutputError(ValueError):
+    """Raised when a completed response has no valid structured output."""
 
 
 class Agent:
@@ -100,3 +107,47 @@ class Agent:
                 )
 
         raise RuntimeError("model request limit exhausted")
+
+    def run_structured(
+        self,
+        user_input: str,
+        output_type: type[OutputT],
+        *,
+        instructions: str | None = None,
+    ) -> OutputT:
+        """Run one request and parse its final response as a Pydantic model.
+
+        Args:
+            user_input: Input sent to the model.
+            output_type: Pydantic model required from the final response.
+            instructions: Optional instructions replacing the Agent defaults.
+
+        Returns:
+            The validated structured response.
+
+        Raises:
+            StructuredOutputError: If the response is incomplete, refused, or
+                does not contain valid structured output.
+        """
+        try:
+            response = self.client.responses.parse(
+                model=self.model,
+                instructions=self.instructions
+                if instructions is None
+                else instructions,
+                input=user_input,
+                text_format=output_type,
+            )
+        except ValidationError as error:
+            raise StructuredOutputError(
+                "model response did not match the requested structured output"
+            ) from error
+
+        if response.status != "completed":
+            raise StructuredOutputError(
+                f"model response did not complete (status: {response.status})"
+            )
+        parsed = response.output_parsed
+        if parsed is None:
+            raise StructuredOutputError("model response contained no structured output")
+        return parsed
