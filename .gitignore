@@ -28,4 +28,5 @@ AGENTS.md
 .DS_Store
 
 # Docs
-docs/
+# docs/
+**/technical-debt.md
