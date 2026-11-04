@@ -1,144 +1,49 @@
-# Memento Agent
+# Memento
 
-A provenance-backed personal memory system. Source files are stored by content hash, and structured records refer to their supporting source files through `evidence.source`.
-
-## Workspace
-
-Initialize a workspace with `init_workspace()`. Achievement records are structured TOML files stored as:
+Memento turns personal documents such as certificates into structured, source-linked memories. Its conversational agent helps you inspect and organize achievements, while you decide what gets saved.
 
 ```text
-records/<record-type>/<record-id>.toml
+Add a document to inbox → Agent parses and summarizes it → You review and confirm → Memento saves a source-linked record
 ```
 
-Original supporting documents are imported to `sources/<hash-prefix>/<sha256>.<extension>`. Parse snapshots are optional derived text artifacts stored under `.memento/parses/<source-digest>/<parse-id>/`:
+## Quickstart
 
-```text
-metadata.toml
-content.md
+Memento requires Python 3.11+, [`uv`](https://docs.astral.sh/uv/), an OpenAI API key, and a [MinerU](https://mineru.net/) API key for document parsing.
+
+```bash
+git clone <repository-url>
+cd memento-agent
+uv sync
 ```
 
-Snapshot metadata and records are structured TOML. `content.md` preserves the parser's raw text output. Record evidence points directly to the original source file. Page and quote may be included as optional context, but validation only checks that the referenced source exists; it does not require parse snapshots or match quotes to parse blocks.
+Create a `.env` file in the project directory:
 
-## Agent Runtime and Application Harness
-
-The project uses the official OpenAI Python SDK behind a project-owned Agent
-Runtime. `TaskSpec` declares one-shot structured tasks such as achievement
-extraction. `AgentSession` and `run_turn()` provide local in-memory replay for
-the user-facing conversational Agent. The Runtime owns the Responses request
-loop, tool dispatch, execution limits, and error boundaries; it does not expose
-SDK response objects, usage, or credentials to application code.
-
-`workflows/harness.py` assembles the root `MementoAgent`, its workspace context,
-and semantic capability tools. The model decides which capability to call and
-when to stop. `capabilities/achievement/` contains deterministic domain
-operations and the structured extraction task; it does not own the user
-conversation or a fixed source-to-record sequence.
-
-The same Agent can read existing memory through the read-only `list_records`
-and `get_record` tools. Lists contain generic envelope metadata and
-type-specific summaries; a single-record lookup returns the complete raw TOML
-structure, including records whose payload schema is not implemented yet. Read
-operations do not load parse content or source files and do not modify the
-workspace.
-
-Tools use explicit `ToolSpec` declarations. Bounded subagents remain a future
-composition point. Persistent sessions, handoffs, ReAct orchestration,
-asynchronous execution, and concrete subagent implementations are not part of
-the current implementation.
-
-Use `AgentRuntime` as a context manager when it creates its own OpenAI client:
-
-```python
-from mementoagent.agents import AgentRuntime
-from mementoagent.capabilities.achievement import extract_achievement
-
-with AgentRuntime(model=model, api_key=api_key) as runtime:
-    draft = extract_achievement(runtime, snapshot)
+```dotenv
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=your-tool-capable-model
+MINERU_API_KEY=your-mineru-api-key
 ```
 
-Create one `MementoAgent` for a user conversation. It receives ordinary user
-messages, chooses capability tools, and can stop after inspection or extraction
-without creating a record. The application does not prescribe a fixed
-source-to-record sequence.
+Initialize a workspace and add a document to its inbox:
 
-```python
-from mementoagent.agents import AgentRuntime
-from mementoagent.workflows import MementoAgent
-
-with AgentRuntime(model=model, api_key=api_key) as runtime:
-    agent = MementoAgent(
-        workspace_root,
-        parser,
-        runtime,
-    )
-    turn = agent.send("Process the certificate in my inbox.")
-    print(turn.text)
+```bash
+uv run memento init ./memento-workspace
+cp /path/to/certificate.pdf ./memento-workspace/inbox/
+uv run memento chat --workspace ./memento-workspace
 ```
 
-The extraction capability reads a `ParseSnapshot` and returns an in-memory
-`AchievementDraft`. Document-supported facts are validated with the
-`AchievementItem` schema, and the source hash comes from snapshot metadata. A
-draft may contain one optional `description_suggestion`; it is an unconfirmed
-proposal and must not invent personal responsibilities, impact, or metrics.
-Organization is optional because some credentials do not need a useful issuer
-value. Event dates are not included yet because date interpretation belongs in
-deterministic code.
+In the chat, ask Memento to process the document. Review the extracted facts and suggested description, then explicitly confirm before asking it to save. Type `exit` or press Ctrl-D to leave.
 
-When the user explicitly confirms a complete `AchievementItem`, the Agent can
-call the achievement save capability. Materialization preserves record-level
-`document` provenance, uses the original source hash as evidence with an empty
-`supports` list, and writes the accepted description into `data.description`.
-The capability then reuses `validate_record()` and `save_record()`.
+The workspace keeps imported source files under `sources/`, parse snapshots under `.memento/parses/`, and confirmed achievement records under `records/`. The source reference is attached to the saved record so you can trace it back to the document.
 
-Future TUI input will keep slash commands such as `/init` and `/check` in a
-deterministic outer command layer. Ordinary natural-language input will be
-forwarded to `MementoAgent.send()`; the Runtime does not depend on terminal
-rendering.
+## How it works
 
-Timeline views are intentionally deferred. Record reads preserve `occurred`
-and `created_at`, while event ordering and fallback behavior remain undefined
-until deterministic date handling is implemented.
+The model decides which available tools to call and in what order. Deterministic code handles source import, parser integration, record validation, and persistence. Memento asks for your confirmation before saving an achievement, and does not treat a suggested description as a document fact until you accept it.
 
-## MinerU Parser Configuration
+## Current limitations
 
-The MinerU parser accepts an API key and an optional API base URL from its caller. The base URL is resolved in this order:
-
-```text
-explicit api_base_url argument
-    > MEMENTO_MINERU_API_BASE_URL
-    > https://mineru.net/api/v4
-```
-
-Set `MEMENTO_MINERU_API_BASE_URL` when using a private MinerU deployment or a different endpoint. The application entry point may call `load_dotenv()` before constructing the parser; the parser library itself does not load `.env` files. The HTTP transport only sends requests, while the MinerU adapter owns authentication, polling states, signed upload URLs, and result handling.
-
-```python
-from mementoagent.parsers import MineruParser
-
-with MineruParser(api_key=api_key) as parser:
-    content = parser.parse(source_path)
-```
-
-`AgentRuntime`, `MineruParser`, and `HttpxTransport` provide `close()` and context managers. Each closes only the resources it creates. The caller remains responsible for closing an injected client or transport; a parser or runtime can reuse its connections across multiple calls inside the context.
-
-MinerU's `timeout` is a time budget checked between stages and before returning a successful result. Requests use the remaining budget for their waiting time, capped by the adapter's per-request timeout. This does not forcibly interrupt an in-flight synchronous request; a stage that finishes after the deadline is rejected rather than returned as a success.
-
-## Check a Record
-
-From inside a workspace, validate one achievement record with:
-
-```sh
-uv run memento check records/achievement/ach_<ULID>.toml
-```
-
-The command prints `OK` and exits with status `0` for a valid record. It prints validation or loading errors to stderr and exits with status `1`. Argument errors exit with status `2`.
-
-Run project checks with:
-
-```sh
-uv run pytest
-uv run pyright
-uv run ruff check .
-uv run ruff format --check .
-```
-
-Pyright currently uses `standard` mode. Ruff checks docstrings, basic errors, unused imports, and import ordering (`D`, `E4`, `E7`, `E9`, `F`, and `I`).
+- The interactive interface is a line-oriented CLI; there is no TUI.
+- Conversation history exists only for the lifetime of the running process.
+- The current agent workflow focuses on achievement documents and records.
+- MinerU is the configured document parser; other parser integrations are not exposed through the CLI.
+- There is no timeline view or persistent session recovery yet.
