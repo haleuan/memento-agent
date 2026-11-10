@@ -57,11 +57,12 @@ class Agent:
             RuntimeError: If the model request limit is exhausted.
 
         API errors propagate to the caller. Tool failures are returned to the
-        model as function outputs. Conversation history is committed only
-        after a completed final response. Tool side effects are not rolled
-        back if the turn fails.
+        model as function outputs. The user message and each completed
+        model/tool cycle are recorded immediately. Tool side effects are not
+        rolled back if the turn fails.
         """
-        items = [*conversation._items, {"role": "user", "content": user_input}]
+        conversation.append_user_message(user_input)
+        items = conversation.snapshot()
         tool_by_name = {tool.name: tool for tool in self.tools}
         definitions = [tool.definition() for tool in self.tools]
 
@@ -76,14 +77,14 @@ class Agent:
                 raise RuntimeError(
                     f"model response did not complete (status: {response.status})"
                 )
-            items.extend(response.output)
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:
-                conversation._items = items
+                conversation.append_completed_response(response.output)
                 return response.output_text
             if call_number == self.max_model_calls - 1:
                 raise RuntimeError("model request limit exhausted")
 
+            tool_outputs: list[tuple[str, str]] = []
             for call in calls:
                 tool = tool_by_name.get(call.name)
                 if tool is None:
@@ -98,13 +99,10 @@ class Agent:
                     )
                 else:
                     output = tool.execute(call.arguments)
-                items.append(
-                    {
-                        "type": "function_call_output",
-                        "call_id": call.call_id,
-                        "output": output,
-                    }
-                )
+                tool_outputs.append((call.call_id, output))
+
+            conversation.append_completed_response(response.output, tool_outputs)
+            items = conversation.snapshot()
 
         raise RuntimeError("model request limit exhausted")
 
