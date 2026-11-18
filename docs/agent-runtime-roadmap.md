@@ -42,17 +42,48 @@ small:
   private storage.
 - `Agent.run()` owns model requests, tool dispatch, `call_id` pairing, and the
   per-call request limit.
+- `AgentEvent` exposes synchronous progress notifications and visible text
+  increments without storing events in replay history or exposing tool payloads.
 - The CLI and Memento workflow remain outside the generic Agent package.
 
 Each completed model response and its ordered tool outputs are committed as a
 single replayable history unit. A failed later request preserves completed
 units but does not record function calls whose tools were not executed.
 
+## Streaming And Events
+
+`Agent.run(..., stream=True, on_event=...)` consumes typed events from
+`client.responses.create(..., stream=True)` and still returns the final response
+text. The callback receives `model_request`, `text_delta`, `tool_call`, and
+`tool_result` notifications. A returned tool result can contain an error;
+`tool_result` does not indicate business success. Without streaming, the callback
+still receives model-request and tool-stage notifications.
+
+Only `response.output_text.delta` becomes visible text. The complete `Response`
+comes from `response.completed`, so the runtime does not assemble argument
+deltas or execute partial tool calls. Both request modes share the existing
+budget check, sequential dispatch, and complete-prefix history commits.
+
+Failed or incomplete streams raise an error without committing their partial
+output. Text already displayed is provisional. SDK and callback exceptions
+propagate, and tool side effects are not rolled back. Callbacks run synchronously;
+there is no event bus or asynchronous executor.
+
+The CLI renders text to stdout and progress to stderr. `memento chat` enables
+streaming by default; `--no-stream` prints complete replies instead. Run failures
+return to the input prompt without an automatic retry. Ctrl-C and EOF exit the
+chat; this does not provide hard cancellation of synchronous tool operations.
+
+Protocol references:
+
+- [Streaming API responses](https://developers.openai.com/api/docs/guides/streaming-responses)
+- [Responses streaming events](https://developers.openai.com/api/reference/resources/responses/streaming-events)
+
 ## Development Order
 
-1. Add streaming runtime events without mixing events into replay history.
-2. Add context-window accounting and an explicit compaction boundary.
-3. Add persisted sessions and resume after the in-memory contract is stable.
+1. Streaming runtime events, separate from replay history: implemented.
+2. Add persisted sessions and resume after the in-memory contract is stable.
+3. Add context-window accounting and an explicit compaction boundary.
 4. Add approval policies, subagents, handoffs, or asynchronous execution only
    when a concrete capability requires them.
 

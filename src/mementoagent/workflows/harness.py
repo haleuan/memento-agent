@@ -1,10 +1,11 @@
 """Application harness for the Memento Agent."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from openai import OpenAI
 
-from mementoagent.agents import Agent, Conversation
+from mementoagent.agents import Agent, AgentEvent, Conversation
 from mementoagent.parsers import Parser
 
 from .tools import MementoContext, MementoToolset
@@ -50,6 +51,17 @@ class MementoAgent:
             tools=MementoToolset(context).tools(),
         )
 
-    def send(self, user_input: str) -> str:
+    def send(
+        self,
+        user_input: str,
+        *,
+        stream: bool = False,
+        on_event: Callable[[AgentEvent], None] | None = None,
+    ) -> str:
         """Send one user message and return the final Agent response."""
-        return self._agent.run(user_input, conversation=self._conversation)
+        return self._agent.run(
+            user_input,
+            conversation=self._conversation,
+            stream=stream,
+            on_event=on_event,
+        )

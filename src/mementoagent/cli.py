@@ -7,8 +7,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
+from mementoagent.agents import AgentEvent
 from mementoagent.parsers import MineruParser
 from mementoagent.schema import ACHIEVEMENT_SCHEMA_VERSION, AchievementItem
 from mementoagent.validation import validate_record
@@ -28,7 +29,7 @@ def _run_init(path: Path) -> int:
     return 0
 
 
-def _run_chat(workspace_root: Path) -> int:
+def _run_chat(workspace_root: Path, *, stream: bool = True) -> int:
     """Run one line-oriented Memento conversation."""
     load_dotenv()
     if not (workspace_root / ".memento").is_dir():
@@ -37,6 +38,28 @@ def _run_chat(workspace_root: Path) -> int:
 
     model = os.environ["OPENAI_MODEL"]
     mineru_api_key = os.environ["MINERU_API_KEY"]
+
+    text_line_open = False
+
+    def render_event(event: AgentEvent) -> None:
+        """Write visible text to stdout and stage notifications to stderr."""
+        nonlocal text_line_open
+        if event.kind == "text_delta":
+            if not text_line_open:
+                print("Agent: ", end="", flush=True)
+            print(event.delta, end="", flush=True)
+            text_line_open = True
+            return
+
+        if text_line_open:
+            print(flush=True)
+            text_line_open = False
+        if event.kind == "model_request":
+            print("[model] requesting", file=sys.stderr, flush=True)
+        elif event.kind == "tool_call":
+            print(f"[tool] {event.tool_name}: started", file=sys.stderr, flush=True)
+        elif event.kind == "tool_result":
+            print(f"[tool] {event.tool_name}: returned", file=sys.stderr, flush=True)
 
     with OpenAI() as client, MineruParser(mineru_api_key) as parser:
         agent = MementoAgent(
@@ -48,13 +71,28 @@ def _run_chat(workspace_root: Path) -> int:
         while True:
             try:
                 user_input = input("You: ").strip()
+                if user_input.lower() in {"exit", "quit"}:
+                    return 0
+                if not user_input:
+                    continue
+                reply = agent.send(user_input, stream=stream, on_event=render_event)
             except (EOFError, KeyboardInterrupt):
                 print()
                 return 0
-            if user_input.lower() in {"exit", "quit"}:
-                return 0
-            if user_input:
-                print(f"Agent: {agent.send(user_input)}")
+            except (OpenAIError, RuntimeError):
+                if text_line_open:
+                    print(flush=True)
+                print(
+                    "error: Agent run failed. Completed steps remain in this session.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            else:
+                if text_line_open:
+                    print(flush=True)
+                if not stream:
+                    print(f"Agent: {reply}")
+            text_line_open = False
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -82,12 +120,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         "chat", help="start an interactive Memento Agent conversation"
     )
     chat_parser.add_argument("--workspace", type=Path, required=True)
+    chat_parser.add_argument(
+        "--no-stream",
+        action="store_true",
+        help="print complete replies without streaming",
+    )
     args = parser.parse_args(argv)
 
     if args.command == "init":
         return _run_init(args.path.expanduser().resolve())
     if args.command == "chat":
-        return _run_chat(args.workspace.expanduser().resolve())
+        return _run_chat(
+            args.workspace.expanduser().resolve(), stream=not args.no_stream
+        )
 
     record_path = args.record_path.expanduser().resolve()
     try:
